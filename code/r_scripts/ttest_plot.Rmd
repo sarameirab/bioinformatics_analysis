@@ -87,7 +87,7 @@ generate_boxplot <- function(gene_name, drug_name, data_path) {
 }
 
 # Example usage
-data_path <- "/Users/efraimshine/workspace/ai_agent_lab_data"
+data_path <- "~/workspace/ai_agent_lab_data"
 gene_name <- "ABCA1 (19)"  # Replace with desired gene name
 drug_name <- "VISOMITIN (BRD:BRD-K00003375-004-01-9)" # Replace with desired drug name
 generate_boxplot(gene_name, drug_name, data_path)

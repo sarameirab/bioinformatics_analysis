@@ -1,0 +1,45 @@
+---
+title: "gdsc_copy_number"
+output: html_document
+---
+```{r}
+install.packages("readr")
+install.packages("dplyr")
+
+```
+
+```{r}
+library(dplyr)
+library(readr)
+data_directory <- "~/workspace/ai_agent_lab_data/GDSC/"
+# Read the CNV data CSV file, assuming the first two rows contain headers
+cnv_data <- read_csv(cnv_file, col_types = cols())
+cnv_data
+```
+
+```{r}
+# Clean up the dataframe by removing empty columns after the second row (model names)
+cnv_data <- cnv_data[, colSums(is.na(cnv_data)) < nrow(cnv_data)]
+
+# The first row contains the model names, and the second row contains gene_id and symbol
+model_names <- cnv_data[1, 3:ncol(cnv_data)]  # Model names are from the 3rd column onwards
+
+# Set the proper column names (gene_id, symbol, and the model names)
+colnames(cnv_data) <- c("gene_id", "symbol", model_names)
+
+# Drop the first row which contains model names
+cnv_data <- cnv_data[-1, ]
+
+# Convert the CNV values to numeric, forcing any non-numeric values to NA
+cnv_data[3:ncol(cnv_data)] <- apply(cnv_data[3:ncol(cnv_data)], 2, as.numeric)
+
+# Find genes with copy number zero in any of the cell lines
+genes_with_zero_copy <- cnv_data %>%
+  filter(apply(cnv_data[3:ncol(cnv_data)], 1, function(x) any(x == 0)))
+
+# Display the result
+print("Genes with copy number zero in the GDSC database:")
+print(genes_with_zero_copy[, c("gene_id", "symbol")])
+
+
+```
