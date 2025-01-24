@@ -35,6 +35,7 @@ samples_gene_expression = fread("TcgaTargetGtex_gene_expected_count.gz");
 ```
 
 ```{r}
+setwd("/Users/efraimshine/Desktop/rna_seq/TCGA")
 create_back_transformed_df <- function(sample_file, gene_expression_data) {
   # Read the sample list
   list_data <- read.csv(sample_file, header = FALSE)
@@ -131,16 +132,57 @@ merged_df_rownames_rounded
 
 
 ```{r}
+
+setwd("/Users/efraimshine/Desktop/rna_seq/TCGA")
+
 metadata <- data.frame(sample_names <- colnames(merged_df[,-1]))
 #row.names(metadata) <- colnames(merged_df)
 metadata <- mutate(metadata, G6PD_STATUS = ifelse(row_number() <= length(g6pd_del_df[,-1]), "del", "normal"))
+
 metadata_rnames <- metadata
 rownames(metadata_rnames) <- metadata$sample_names....colnames.merged_df
 metadata_rnames$sample_names....colnames.merged_df....1.. <- NULL
 metadata
 metadata_rnames
 
+
+
 ```
+
+```{r}
+# metadata <- mutate(metadata, G6PD_STATUS = ifelse(row_number() <= length(g6pd_del_df[,-1]), "del", "normal"))
+
+setwd("/Users/efraimshine/Desktop/rna_seq/TCGA")
+metadata_rnames_for_info_merge <- metadata_rnames
+metadata_rnames_for_info_merge
+#expanding meta data information for analysis of g6pd deleted samples VS 200 g6pd normal samples from the center of g6pd expression information
+library("dplyr")
+
+samples_info_deleted_vs_200_patients <- read_tsv("g6pd_samples_info_deleted_vs_two_hundreds.tsv") 
+samples_info_deleted_vs_200_patients <- as.data.frame(samples_info_deleted_vs_200_patients) %>% dplyr::select(`Sample ID`,`Cancer Type`,`Cancer Type Detailed`)
+
+# merege metadata with info df
+row.names(metadata_rnames_for_info_merge) <- gsub("^[^_]*_", "", row.names(metadata_rnames_for_info_merge))
+
+metadata_rnames_merged_with_info <- merge(metadata_rnames_for_info_merge,samples_info_deleted_vs_200_patients, by.x = "row.names", by.y = "Sample ID",all.x = TRUE)
+row.names(metadata_rnames_merged_with_info) <- metadata_rnames_merged_with_info$Row.names
+metadata_rnames_merged_with_info$Row.names <- NULL
+metadata_rnames_merged_with_info <- metadata_rnames_merged_with_info[order(metadata_rnames_merged_with_info$G6PD_STATUS), ]
+metadata_rnames_merged_with_info_orderd <- metadata_rnames_merged_with_info[match(row.names(metadata_rnames_for_info_merge), row.names(metadata_rnames_merged_with_info)), ]
+
+row.names(metadata_rnames_merged_with_info_orderd) <- row.names(metadata_rnames)
+colnames(metadata_rnames_merged_with_info_orderd)[2] <- "cancer_type"
+colnames(metadata_rnames_merged_with_info_orderd)[3] <- "cancer_type_detailed"
+
+metadata_rnames_merged_with_info_orderd$cancer_type <- as.factor(metadata_rnames_merged_with_info_orderd$cancer_type)
+metadata_rnames_merged_with_info_orderd$cancer_type_detailed <- as.factor(metadata_rnames_merged_with_info_orderd$cancer_type_detailed)
+metadata_rnames_merged_with_info
+metadata_rnames_merged_with_info_orderd
+
+```
+
+
+
 
 ```{r}
 names_df <- as.data.frame(data_col <- colnames(matrix_for_deseq),metadatarows <- rownames(metadata_rnames))
@@ -238,6 +280,35 @@ dev.off()
 ```{r}
 # GO_results <- enricher()
 # as.data.frame(GO_results)
+```
+
+
+
+
+
+```{r}
+#multi factor analysis 
+metadata_rnames_merged_with_info_orderd
+library(DESeq2)
+ddsMF <- DESeqDataSetFromMatrix(countData = matrix_for_deseq,
+                              colData = metadata_rnames_merged_with_info_orderd,
+                              design = ~ cancer_type + G6PD_STATUS)
+ddsMF$G6PD_STATUS <- relevel(ddsMF$G6PD_STATUS, ref = "normal")
+ddsMF <- DESeq(ddsMF)
+#design(ddsMF) <- formula(~ cancer_type + G6PD_STATUS)
+# levels(ddsMF$`Cancer Type`)
+# levels(ddsMF$`Cancer Type`) <- sub("-.*", "", levels(ddsMF$`Cancer Type`))
+# levels(ddsMF$`Cancer Type`)s
+
+
+```
+```{r}
+ddsMF_results <- results(ddsMF,contrast = c())
+summary(ddsMF_results)
+resultsNames(ddsMF_results)
+```
+```{r}
+names(as.data.frame(coef(ddsMF)))
 ```
 
 Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
