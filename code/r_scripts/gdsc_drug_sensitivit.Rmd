@@ -1,0 +1,20 @@
+---
+title: "gdsc_drug_sensitivit"
+output: html_document
+---
+
+```{r}
+install.packages("readr")
+install.packages("dplyr")
+
+```
+
+```{r}
+library(dplyr)
+library(readr)
+cnv_file <- "~/workspace/ai_agent_lab_data/GDSC/GDSC2_fitted_dose_response_27Oct23.csv"
+# Read the CNV data CSV file, assuming the first two rows contain headers
+cnv_data <- read_csv(cnv_file, col_types = cols())
+cnv_data
+```
+
