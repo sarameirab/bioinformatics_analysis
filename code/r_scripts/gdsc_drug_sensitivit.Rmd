@@ -6,15 +6,64 @@ output: html_document
 ```{r}
 install.packages("readr")
 install.packages("dplyr")
+install.packages("tidyr")
 
 ```
 
 ```{r}
 library(dplyr)
 library(readr)
-cnv_file <- "~/workspace/ai_agent_lab_data/GDSC/GDSC2_fitted_dose_response_27Oct23.csv"
+#cnv_file <- "~/workspace/ai_agent_lab_data/GDSC/GDSC2_fitted_dose_response_27Oct23.csv"
+gdsc_from_depmap_file <- "C:\\Users\\sarameirab\\Desktop\\sanger-dose-response.csv"
+
 # Read the CNV data CSV file, assuming the first two rows contain headers
-cnv_data <- read_csv(cnv_file, col_types = cols())
-cnv_data
+gdsc_from_depmap <- read.csv(gdsc_from_depmap_file)
+
+gdsc_from_depmap$log2_ic50 <- log2(gdsc_from_depmap$IC50_PUBLISHED)
+gdsc_from_depmap
+```
+
+```{r}
+gdsc1_pre_filtered <- gdsc_from_depmap %>% filter(DATASET == "GDSC1") 
+gdsc2_pre_filtered <- gdsc_from_depmap %>% filter(DATASET == "GDSC2")
+gdsc1 <- gdsc_from_depmap %>% filter(DATASET == "GDSC1")  %>%
+  filter(!is.na(ARXSPAN_ID) & ARXSPAN_ID != "")
+
+gdsc2 <- gdsc_from_depmap %>% filter(DATASET == "GDSC2")  %>%
+  filter(!is.na(ARXSPAN_ID) & ARXSPAN_ID != "")
+gdsc1_pre_filtered
+gdsc1
+gdsc2_pre_filtered
+gdsc2
+
+```
+
+```{r}
+library(tidyr)
+gdsc1_transposed <- gdsc1 %>% 
+  pivot_wider(
+    id_cols = DRUG_ID,
+    names_from = ARXSPAN_ID,
+    values_from = log2_ic50
+  )%>% t() %>% as.data.frame()
+colnames(gdsc1_transposed) <- as.character(gdsc1_transposed[1, ])  # Set the first row as column names
+gdsc1_transposed <- gdsc1_transposed[-1, ]
+gdsc1_transposed
+```
+```{r}
+gdsc1_row_names_to_column <-  cbind(string_field_0 = rownames(gdsc1_transposed), gdsc1_transposed)
+gdsc1_row_names_to_column
+```
+
+
+```{r}
+gdsc1_transposed %>% filter(rownames(gdsc1_transposed) == "ACH-002172")
+```
+```{r}
+gdsc1_transposed %>% select(`435`)
+```
+```{r}
+path_gdsc1_file_for_analysis <- "C:\\Users\\sarameirab\\Desktop\\gdsc1_for_ttest_analysis.csv"
+write.csv(gdsc1_row_names_to_column, path_gdsc1_file_for_analysis, row.names = FALSE)
 ```
 
