@@ -64,6 +64,62 @@ gdsc1_transposed %>% select(`435`)
 ```
 ```{r}
 path_gdsc1_file_for_analysis <- "C:\\Users\\sarameirab\\Desktop\\gdsc1_for_ttest_analysis.csv"
-write.csv(gdsc1_row_names_to_column, path_gdsc1_file_for_analysis, row.names = FALSE)
+#write.csv(gdsc1_row_names_to_column, path_gdsc1_file_for_analysis, row.names = FALSE)
+```
+
+
+```{r} 
+#  reatinf a df for drug annotations from gdsc1 df
+gdsc1
+length(unique(gdsc1$DRUG_ID))
+length(unique(gdsc1$DRUG_NAME))
+length(unique(gdsc1$BROAD_ID))
+
+# Step 1: Extract unique DRUG_ID values
+unique_drug_ids <- unique(gdsc1$DRUG_ID)
+
+# Step 2: Create the new data frame
+drug_annotation_gdsc_broad <- data.frame(
+  DRUG_ID_gdsc1 = unique_drug_ids,
+  DRUG_NAME = gdsc1$DRUG_NAME[match(unique_drug_ids, gdsc1$DRUG_ID)],
+  BROAD_ID = gdsc1$BROAD_ID[match(unique_drug_ids, gdsc1$DRUG_ID)],
+  stringsAsFactors = FALSE
+)
+
+drug_annotation_gdsc_broad
+```
+
+
+
+
+```{r}
+#validate drugs annotations 
+gdsc1 %>% filter(DRUG_ID == 17)
+length(unique(drug_annotation_gdsc_broad$DRUG_NAME))
+length(unique(drug_annotation_gdsc_broad$DRUG_ID_gdsc1))
+length(unique(drug_annotation_gdsc_broad$BROAD_ID))
+```
+```{r}
+#load gdsc ttest results
+gdsc1_ttest <- read.csv("C:\\Users\\sarameirab\\Desktop\\ai_agent_lab_data\\GDSC\\all_genes_all_drugs_ttest_gdsc1.csv")
+gdsc1_ttest$effct_size <- gdsc1_ttest$no_lof_mean - gdsc1_ttest$lof_mean
+gdsc1_ttest
+```
+```{r}
+# add to gdsc t tst results drug annotations
+
+gdsc1_ttest_with_drug_annotation <-  merge(
+  x = gdsc1_ttest, 
+  y = drug_annotation_gdsc_broad, 
+  by.x = "drug", 
+  by.y = "DRUG_ID_gdsc1", 
+  all.x = TRUE
+)
+gdsc1_ttest_with_drug_annotation
+```
+```{r}
+# crate csv file with t test results for gdsc1 and drug annotations
+
+write.csv(gdsc1_ttest_with_drug_annotation, "C:\\Users\\sarameirab\\Desktop\\ai_agent_lab_data\\GDSC\\gdsc1_ttest_with_drug_annotation.csv", row.names = FALSE)
 ```
 
