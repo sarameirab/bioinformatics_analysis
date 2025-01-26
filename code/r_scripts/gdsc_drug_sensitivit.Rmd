@@ -49,10 +49,23 @@ gdsc1_transposed <- gdsc1 %>%
 colnames(gdsc1_transposed) <- as.character(gdsc1_transposed[1, ])  # Set the first row as column names
 gdsc1_transposed <- gdsc1_transposed[-1, ]
 gdsc1_transposed
+
+gdsc2_transposed <- gdsc2 %>% 
+  pivot_wider(
+    id_cols = DRUG_ID,
+    names_from = ARXSPAN_ID,
+    values_from = log2_ic50
+  )%>% t() %>% as.data.frame()
+colnames(gdsc1_transposed) <- as.character(gdsc2_transposed[1, ])  # Set the first row as column names
+gdsc2_transposed <- gdsc1_transposed[-1, ]
+gdsc2_transposed
 ```
 ```{r}
 gdsc1_row_names_to_column <-  cbind(string_field_0 = rownames(gdsc1_transposed), gdsc1_transposed)
 gdsc1_row_names_to_column
+
+gdsc2_row_names_to_column <-  cbind(string_field_0 = rownames(gdsc2_transposed), gdsc2_transposed)
+gdsc2_row_names_to_column
 ```
 
 
@@ -64,7 +77,8 @@ gdsc1_transposed %>% select(`435`)
 ```
 ```{r}
 path_gdsc1_file_for_analysis <- "C:\\Users\\sarameirab\\Desktop\\gdsc1_for_ttest_analysis.csv"
-#write.csv(gdsc1_row_names_to_column, path_gdsc1_file_for_analysis, row.names = FALSE)
+path_gdsc2_file_for_analysis <- "C:\\Users\\sarameirab\\Desktop\\gdsc2_for_ttest_analysis.csv"
+#write.csv(gdsc2_row_names_to_column, path_gdsc2_file_for_analysis, row.names = FALSE)
 ```
 
 

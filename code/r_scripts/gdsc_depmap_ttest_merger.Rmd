@@ -1,0 +1,56 @@
+```{r}
+gdsc_1_ttest_df <- read.csv("C:\\Users\\sarameirab\\Desktop\\ai_agent_lab_data\\GDSC\\gdsc1_ttest_with_drug_annotation.csv")
+gdsc_1_ttest_df
+depmap_ttest_df <- read.csv("C:\\Users\\sarameirab\\Desktop\\ai_agent_lab_data\\depmap\\AllGenesAllDrugLofTtest.csv")
+depmap_ttest_df
+```
+```{r}
+#depmap_ttest_df$BROAD_ID <- sub(".*BRD:([^\\-]+\\-[^\\-]+).*", "BRD-\\1", depmap_ttest_df$drug)
+depmap_ttest_df$BROAD_ID <- sub(".*BRD:([^-]+-[^-]+).*", "\\1",depmap_ttest_df$drug)
+depmap_ttest_df
+```
+```{r}
+library(tidyr)
+gdsc_1_ttest_df_duplicated <- gdsc_1_ttest_df %>%
+  separate_rows(BROAD_ID, sep = ",")
+gdsc_1_ttest_df_duplicated
+```
+```{r}
+library(dplyr)
+# Step 1: Filter out rows with empty 'BROAD_ID'
+depmap_ttest_df_filtered <- depmap_ttest_df %>%
+  filter(!is.na(BROAD_ID) & BROAD_ID != "")
+
+gdsc_1_ttest_df_duplicated_filtered <- gdsc_1_ttest_df_duplicated %>%
+  filter(!is.na(BROAD_ID) & BROAD_ID != "")
+
+# Step 2: Add 'depmap' prefix to columns in depmap_ttest_df
+names(depmap_ttest_df_filtered) <- paste("depmap", names(depmap_ttest_df_filtered), sep = "_")
+names(depmap_ttest_df_filtered)[names(depmap_ttest_df_filtered) %in% c("depmap_mutation", "depmap_BROAD_ID")] <- c("mutation", "BROAD_ID")
+
+# Add 'gdsc1' prefix to columns in gdsc_1_ttest_df_duplicated
+names(gdsc_1_ttest_df_duplicated_filtered) <- paste("gdsc1", names(gdsc_1_ttest_df_duplicated_filtered), sep = "_")
+names(gdsc_1_ttest_df_duplicated_filtered)[names(gdsc_1_ttest_df_duplicated_filtered) %in% c("gdsc1_mutation", "gdsc1_BROAD_ID")] <- c("mutation", "BROAD_ID")
+
+# Step 3: Perform an inner join on 'mutation' and 'BROAD_ID'
+merged_df <- inner_join(depmap_ttest_df_filtered, gdsc_1_ttest_df_duplicated_filtered, by = c("mutation", "BROAD_ID"))
+
+
+```
+
+```{r}
+merged_df
+```
+
+
+
+```{r}
+merged_df_filtered_by_pvalue <- merged_df %>%
+  filter(gdsc1_p_value <= 0.05, depmap_p_value <= 0.05)
+merged_df_filtered_by_pvalue
+```
+
+```{r}
+View(merged_df_filtered_by_pvalue)
+```
+
