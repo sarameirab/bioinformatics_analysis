@@ -1,0 +1,19 @@
+```{r}
+ttest_hmozygous_prism <- read.csv("C:\\Users\\sarameirab\\Desktop\\ai_agent_lab_data\\depmap\\ttest_homozygous_prism.csv")
+```
+
+```{r}
+ttest_hmozygous_prism
+```
+
+```{r}
+lof_file <- read.csv("C:\\Users\\sarameirab\\Desktop\\ai_agent_lab_data\\depmap\\OmicsSomaticMutationsMatrixDamaging.csv")
+prism_24q2 <- read.csv("C:\\Users\\sarameirab\\Desktop\\ai_agent_lab_data\\depmap\\PRISM_Repurposing_Public_24Q2_subsetted.csv")
+lof_file
+prism_24q2
+```
+
+```{r}
+
+```
+
