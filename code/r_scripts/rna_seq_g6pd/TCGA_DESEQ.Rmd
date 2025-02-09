@@ -137,7 +137,7 @@ setwd("/Users/efraimshine/Desktop/rna_seq/TCGA")
 
 metadata <- data.frame(sample_names <- colnames(merged_df[,-1]))
 #row.names(metadata) <- colnames(merged_df)
-metadata <- mutate(metadata, G6PD_STATUS = ifelse(row_number() <= length(g6pd_del_df[,-1]), "del", "normal"))
+  metadata <- mutate(metadata, G6PD_STATUS = ifelse(row_number() <= length(g6pd_del_df[,-1]), "del", "normal"))
 
 metadata_rnames <- metadata
 rownames(metadata_rnames) <- metadata$sample_names....colnames.merged_df
@@ -264,7 +264,7 @@ genes_to_test_no_dots <- gsub("\\..*", "", genes_to_test)
 ```{r}
 #GO analysis
 GO_results <- enrichGO(gene = genes_to_test_no_dots, OrgDb = "org.Hs.eg.db", keyType = "ENSEMBL", ont = "BP")
-as.data.frame(GO_results)
+path_df_enrich <- as.data.frame(GO_results)
 
 
 ```
@@ -283,22 +283,31 @@ dev.off()
 ```
 
 
+```{r}
+# prepaer meta data for multi factor analysis 
+metadata_rnames_merged_with_info_orderd
+metadata_rnames_merged_with_info_orderd$G6PD_STATUS <- factor(metadata_rnames_merged_with_info_orderd$G6PD_STATUS)
+table(metadata_rnames_merged_with_info_orderd$cancer_type, metadata_rnames_merged_with_info_orderd$G6PD_STATUS)
+metadata_rnames_merged_with_info_orderd$cancer_type <- droplevels(metadata_rnames_merged_with_info_orderd$cancer_type)
+metadata_rnames_merged_with_info_orderd$G6PD_STATUS <- droplevels(metadata_rnames_merged_with_info_orderd$G6PD_STATUS)
+metadata_rnames_merged_with_info_orderd
+```
 
 
 
 ```{r}
-#multi factor analysis 
-metadata_rnames_merged_with_info_orderd
-library(DESeq2)
-ddsMF <- DESeqDataSetFromMatrix(countData = matrix_for_deseq,
-                              colData = metadata_rnames_merged_with_info_orderd,
-                              design = ~ cancer_type + G6PD_STATUS)
-ddsMF$G6PD_STATUS <- relevel(ddsMF$G6PD_STATUS, ref = "normal")
-ddsMF <- DESeq(ddsMF)
-#design(ddsMF) <- formula(~ cancer_type + G6PD_STATUS)
-# levels(ddsMF$`Cancer Type`)
-# levels(ddsMF$`Cancer Type`) <- sub("-.*", "", levels(ddsMF$`Cancer Type`))
-# levels(ddsMF$`Cancer Type`)s
+# #multi factor analysis 
+# metadata_rnames_merged_with_info_orderd
+# library(DESeq2)
+# ddsMF <- DESeqDataSetFromMatrix(countData = matrix_for_deseq,
+#                               colData = metadata_rnames_merged_with_info_orderd,
+#                               design = ~ cancer_type + G6PD_STATUS + cancer_type:G6PD_STATUS)
+# ddsMF$G6PD_STATUS <- relevel(ddsMF$G6PD_STATUS, ref = "normal")
+# ddsMF <- DESeq(ddsMF)
+# #design(ddsMF) <- formula(~ cancer_type + G6PD_STATUS)
+# # levels(ddsMF$`Cancer Type`)
+# # levels(ddsMF$`Cancer Type`) <- sub("-.*", "", levels(ddsMF$`Cancer Type`))
+# # levels(ddsMF$`Cancer Type`)s
 
 
 ```
