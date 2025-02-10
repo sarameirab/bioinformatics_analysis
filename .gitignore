@@ -3,3 +3,6 @@
 .RData
 .Ruserdata
 **/*.png
+.idea/bioinformatics_analysis.iml
+.idea/misc.xml
+
