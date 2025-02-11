@@ -1,0 +1,398 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+K-mean clustering 
+```{r}
+#loading genomic CNA information from gdsc_data_analysis.Rmd
+#total_cna_data_organized
+
+#1. K-Means Clustering
+#K-Means is a popular clustering method that partitions the data into a specified number of clusters. Here’s how to use it in R:
+
+
+# Load necessary libraries
+library(tidyverse)
+
+# Assuming `data` is your matrix with genes as rows and treatments as columns
+#data <- read.csv("path_to_your_data.csv", row.names = 1)
+data <- cluster_genomic_data_mat
+
+# Scale data (important for K-Means)
+scaled_data <- scale(data)
+
+# Set number of clusters
+num_clusters <- 2
+
+# Perform K-Means clustering
+set.seed(123) # For reproducibility
+kmeans_result <- kmeans(na.omit(data), centers = num_clusters)
+
+# Add cluster assignments to your data
+data$cluster <- as.factor(kmeans_result$cluster)
+
+# View the results
+#print(kmeans_result)
+
+```
+
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+```{r}
+library(magick)
+library(Cairo)
+##explore ic50 clusteres genomucis - organizing data- ploting data
+cluster_heatmap <-  Heatmap(na.omit(cluster_genomic_data_mat), 
+        name = "cluster genomics",  # Name for the heatmap legend
+        col = colorRamp2(c(0, 1, 2), c("red", "white","blue")), na_col = "gray",  # Define color scale
+        show_row_names = FALSE,# use_raste = TRUE, raster_resize_mat = TRUE,  # Show row names (genes)
+        show_column_names = FALSE,  # Show column names (samples)
+        cluster_rows = TRUE,  # Cluster rows (genes)
+        cluster_columns = TRUE,  # Cluster columns (samples)
+        row_dend_side = "left",  # Position of row dendrogram
+        column_dend_side = "top",  # Position of column dendrogram
+        heatmap_legend_param = list(title = "Z_score_IC50",  # Customize the legend
+                                    title_position = "topcenter", 
+                                    legend_direction = "vertical"),row_km = 10, row_km_repeats = 1)
+#cluster_heatmap
+
+
+
+png("/Users/efraimshine/Desktop/gdsc_data/heatmap_example.png", width = 800, height = 600)
+draw(cluster_heatmap)
+dev.off()
+htShiny(cluster_heatmap)
+
+
+```
+```{r}
+genes_of_interst <- back_to_df %>% filter(row.names(back_to_df) %in% c("UGT2B17","APOBEC3A_B","APOBEC3B","APOBEC3G"))
+View(genes_of_interst)
+genes_of_interst
+```
+
+
+
+
+mutation cell line file 
+```{r}
+#mutation_file <- read.csv("/Users/efraimshine/Downloads/mutations_all_20230202.csv")
+head(mutation_file)
+```
+proteomics data 
+```{r}
+proteomics_z_score <- read_tsv("/Users/efraimshine/Downloads/Proteomics_20221214/Protein_matrix_averaged_zscore_20221214.tsv")
+proteomics_z_score
+dpyd_proteomics <- proteomics_z_score %>% select(uniprot_id,Q12882) %>% filter(uniprot_id != "symbol",uniprot_id != "model_name") %>% mutate(Q12882 = as.numeric(Q12882)) %>% arrange(desc(Q12882)) %>% filter()
+low_level_dpyd_proteomics <- dpyd_proteomics %>% filter(Q12882 < 0) %>% as.data.frame() 
+high_level_dpyd_proteomics <- dpyd_proteomics %>% filter(Q12882 >0) %>% as.data.frame()
+df_ic50 <- as.data.frame(matrix_data) %>% filter(rownames(df_ic50) == 1073)
+
+common_cell_lines_low <- intersect(low_level_dpyd_proteomics$uniprot_id, colnames(df_ic50))
+common_cell_lines_high <- intersect(high_level_dpyd_proteomics$uniprot_id, colnames(df_ic50))
+
+ic50_mat_selected_dpyd_low_cells <- df_ic50 %>% select(all_of(common_cell_lines_low)) %>% as.matrix()
+ic50_mat_selected_dpyd_low_cells
+#df_ic50 #%>% filter(rownames(df_ic50) == 1073)
+
+high_prot_ic50 <- df_ic50 %>% select(all_of(common_cell_lines_high)) %>% filter(rownames(df_ic50) == 1073) %>% as.matrix() %>% c()
+low_prot_ic50 <- df_ic50 %>% select(all_of(common_cell_lines_low)) %>% filter(rownames(df_ic50) == 1073) %>% as.matrix() %>% c()
+
+boxplot(high_prot_ic50,low_prot_ic50)
+t.test(high_prot_ic50,low_prot_ic50)
+#points(high_prot_ic50,col = "red")
+#points(low_prot_ic50,col = "blue")
+
+```
+```{r}
+# proteomics functions 
+get_gene_proteomics_df <- function(proteomics_z_score_df,protein_id) {
+  # gets proteomics information for the required gene. gets Protein_matrix_averaged_zscore df and uniprot id for the gene of interst
+   gene_proteomics_df <- proteomics_z_score_df %>% select(uniprot_id,protein_id) %>% filter(uniprot_id != "symbol",uniprot_id != "model_name") 
+   gene_proteomics_df[[protein_id]] <- as.numeric(gene_proteomics_df[[protein_id]])
+   gene_proteomics_df <- gene_proteomics_df #%>% arrange(desc(gene_proteomics_df[[protein_id]]))
+  return(gene_proteomics_df)
+}
+
+get_ic50_df_for_drug <- function(drug_number, GDSC_IC50_df) {
+  # gets gdsc ic50 df- cell lines vs drugs, gets a number id of a drug and returns a df of ic50 values for the required drug
+  drug_ic50_data <- GDSC_IC50_df
+  drug_ic50_data <- drug_ic50_data  %>% filter(rownames(drug_ic50_data) == drug_number) 
+  return(drug_ic50_data)
+}
+
+get_common_cell_lines_names <- function(ic50_df, proteomics_df){
+  proteomics_cells_names_column <- proteomics_df$uniprot_id 
+  ic50_cells_names <- colnames(ic50_df)
+  common_cell_lines <- intersect(proteomics_cells_names_column,ic50_cells_names) 
+  return(common_cell_lines)
+}
+
+
+get_ic50_for_specified_cells <- function(ic50_df,cell_lines_vector){
+  ic50_for_inpute_cell_lines <- ic50_df %>% select(all_of(cell_lines_vector)) 
+  return(ic50_for_inpute_cell_lines)
+}
+
+get_proteomics_for_specified_cells <- function(proteomics_df, cell_lines_vector){
+  proteomics_for_inpute_cell_lines <- proteomics_df[proteomics_df$uniprot_id %in% cell_lines_vector, ]
+  return(proteomics_for_inpute_cell_lines)
+}
+
+
+gene_drug_pair_df <- function(one_gene_proteomics_df, one_drug_ic50_df){
+  one_drug_ic50_df <- one_drug_ic50_df %>% t() %>% as.data.frame()
+  merged_df_for_gene_drug <- merge(one_gene_proteomics_df, one_drug_ic50_df, by.x = "uniprot_id", by.y = "row.names")
+  return(merged_df_for_gene_drug)
+}
+
+
+order_ic50_df <- function(ic50_df){
+  orderd_ic50_df <- ic50_df %>% t() %>% as.data.frame() 
+  orderd_ic50_df <- orderd_ic50_df[order(rownames(orderd_ic50_df)), ]
+  return(orderd_ic50_df)
+}
+
+order_proteomics_df <- function(proteomics_df){
+  ordered_proteomics_df <- proteomics_df[order(proteomics_df$uniprot_id), ]
+  return(ordered_proteomics_df)
+}
+
+calculate_correlation_for_one_drug <- function(drug_id,ic50_ordered_df, proteomics_ordered, MIN_PAIRS){
+  #drug_col <- enquo(drug_id)
+  drug_ic50_vector <- as.numeric(ic50_ordered_df[[drug_id]])
+  proteomics_data_no_names <- proteomics_ordered %>% select(-uniprot_id,-model_id)
+  correlation_values_for_drug <- c()
+  for (gene in colnames(proteomics_data_no_names)) {
+    gene_proteomics <- proteomics_data_no_names[, gene] %>% pull() %>% as.numeric()
+    if (is_num_of_non_NA_pairs(MIN_PAIRS,drug_ic50_vector,gene_proteomics)){
+      pearson_cor <- cor(drug_ic50_vector, gene_proteomics, method = "pearson",use="complete.obs")
+      correlation_values_for_drug <- c(correlation_values_for_drug, pearson_cor)
+    } else{
+       correlation_values_for_drug <- c(correlation_values_for_drug, NA)
+    }
+    
+  }
+  return(correlation_values_for_drug)
+}
+
+
+calculate_correlation_for_all_drugs <- function(ic50_ordered_df,proteomics_ordered, MIN_PAIRS){
+  proteomics_data_no_names <- proteomics_ordered %>% select(-uniprot_id,-model_id) 
+  correlation_df <- data.frame(row.names = colnames(proteomics_data_no_names))
+  for (drug in colnames(ic50_ordered_df )){ #%>% select(1:100)
+    print(drug)
+    correlation_df[[drug]] <- calculate_correlation_for_one_drug(drug, ic50_ordered_df,proteomics_ordered, MIN_PAIRS)
+  }
+  return(correlation_df)
+}
+
+is_num_of_non_NA_pairs <- function(MIN_PAIRS, vector_x, vector_y){
+  # Count the number of pairs where both elements are not NA
+  num_non_na_pairs <- sum(!is.na(vector_x) & !is.na(vector_y))
+  if (num_non_na_pairs >= MIN_PAIRS){
+    return(TRUE)
+  } else {
+    return(FALSE)
+  }
+}
+
+pearson_correlation_pvalue_for_gene_drug_pair <- function(protein_id, drug_id, ic50_df, proteomics_df){
+  gene_proteomics <- get_gene_proteomics_df(proteomics_df, protein_id)
+  ic50_drug <- get_ic50_df_for_drug(drug_id,ic50_df)
+  merged_df <- gene_drug_pair_df(gene_proteomics, ic50_drug)
+  pearson_corr_info <- cor.test(merged_df[,2],merged_df[,3],method = "pearson")
+  pearson_corr <- pearson_corr_info$estimate
+  pearson_corr_pvalue <- pearson_corr_info$p.value
+  return(pearson_corr_pvalue)
+}
+
+
+# add_pvlaue_for_correlations_df <- function(gene_drug_correlation_df,ic50_df, proteomics_df){
+#     # gets df with 2 columns for uniprot_id and drug_id pairs that are correlated and add the correlation pvalue to another column
+#   drug_id <- gene_drug_correlation_df[["DRUG_ID"]]
+#   uniprot_id <- gene_drug_correlation_df[["uniprot_id"]]
+#   gene_drug_correlation_with_pvalue_df <- gene_drug_correlation_df
+#   gene_drug_correlation_with_pvalue_df$p_value <- pearson_correlation_pvalue_for_gene_drug_pair(uniprot_id, drug_id, ic50_df, proteomics_df)
+#   return(gene_drug_correlation_with_pvalue_df)
+#   
+# }
+
+add_pvlaue_for_correlations_df <- function(gene_drug_correlation_df,ic50_df, proteomics_df){
+  df_with_pvalue <- gene_drug_correlation_df
+  for (row in rownames(gene_drug_correlation_df)){
+    uniprot_id <- gene_drug_correlation_df[["uniprot_id"]][as.numeric(row)]
+    drug_id <- gene_drug_correlation_df[["DRUG_ID"]][as.numeric(row)]
+    print(uniprot_id)
+    print(drug_id)
+    df_with_pvalue$pvalue[as.numeric(row)] <- pearson_correlation_pvalue_for_gene_drug_pair(uniprot_id, drug_id, ic50_df,proteomics_df)
+  }
+  return(df_with_pvalue)
+}
+#debug(add_pvlaue_for_correlations_df)
+add_pvlaue_for_correlations_df(merged_df_at_least_50_pairs_correlations,gdsc_ic50_df,proteomics_z_score)
+
+gdsc_ic50_df <- as.data.frame(matrix_data)
+#debug(get_common_cell_lines_names)
+intersected_cells_proteomics_and_ic50 <- get_common_cell_lines_names(gdsc_ic50_df ,proteomics_z_score)
+print("number of cell lines in ic50 df is:")
+length(names(gdsc_ic50_df))
+print("number of cell rows in proteomics df is")
+length(rownames(proteomics_z_score %>% filter(uniprot_id != "symbol",uniprot_id != "model_name") ))
+print("number of cell lines in intersected df is:")
+length(intersected_cells_proteomics_and_ic50)
+
+
+
+
+ic50_for_5fu <- get_ic50_df_for_drug(1073,gdsc_ic50_df)
+dpyd_proteomics <- get_gene_proteomics_df(proteomics_z_score,"Q12882")
+cell_lines_to_show <- get_common_cell_lines_names(ic50_for_5fu,dpyd_proteomics)
+
+proteomics_df_for_intersected_cell_lines <- get_proteomics_for_specified_cells(proteomics_z_score,cell_lines_to_show)
+ic50_df_for_intersected_cell_lines <- get_ic50_for_specified_cells(gdsc_ic50_df,cell_lines_to_show)
+dpyd_proteomics <- get_gene_proteomics_df(proteomics_df_for_intersected_cell_lines,"Q12882")
+ic50_for_5fu <- get_ic50_df_for_drug(1073,ic50_df_for_intersected_cell_lines)
+
+
+
+
+
+#gdsc_ic50_df
+#proteomics_z_score %>% filter(uniprot_id != "symbol",uniprot_id != "model_name")
+#proteomics_z_score
+#get_ic50_for_specified_cells(gdsc_ic50_df,cell_lines_to_show)
+# ic50_for_5fu
+# dpyd_proteomics
+# gdsc_ic50_df
+# t(ic50_df_for_intersected_cell_lines) %>% as.data.frame()
+
+ ic50_ordered <- order_ic50_df(ic50_df_for_intersected_cell_lines) #%>% select_if( ~ sum(!is.na(.x)) > 30)
+ proteomics_ordered<- order_proteomics_df(proteomics_df_for_intersected_cell_lines)
+ #proteomics_df_for_intersected_cell_lines
+# proteomics_z_score
+# gene_drug_pair_df(dpyd_proteomics,ic50_for_5fu)
+# proteomics_df_for_intersected_cell_lines
+# ic50_df_for_intersected_cell_lines
+ #plot(ic50_ordered$"1003",proteomics_ordered$A0PJW6)
+ #ic50_ordered
+ #proteomics_ordered
+ #debug(calculate_correlation_for_one_drug)
+ #calculate_correlation_for_one_drug("1003",ic50_ordered,proteomics_ordered)
+ proteomics_data_no_names <- proteomics_ordered %>% select(-uniprot_id,-model_id) #%>% select_if( ~ sum(!is.na(.x)) >= 943)
+gene_proteomics <- proteomics_data_no_names[, "Q12882"] %>% pull() %>% as.numeric()
+drug_ic50_vector <- as.numeric(ic50_ordered$"1010")
+is_num_of_non_NA_pairs(200,ic50_ordered,drug_ic50_vector)
+#ic50_ordered
+#proteomics_data_no_names
+#proteomics_data_no_names$A0A075B6K4
+#results <- calculate_correlation_for_all_drugs(ic50_ordered,proteomics_ordered, 50)
+#correlation_df <- data.frame(row.names = colnames(proteomics_ordered))
+#correlation_df
+#pearson_correlation_pvalue_for_gene_grug_pair("Q15149","1784", gdsc_ic50_df, proteomics_z_score)
+```
+```{r}
+vikash_df <- read_tsv("/Users/efraimshine/Downloads/GSE273196_norm_counts_TPM_GRCh38.p13_NCBI.tsv")
+
+```
+```{r}
+print_all_values_greater_than <- function(value, results) {
+  count <- 0
+  for (i in 1:nrow(results)) {
+  for (j in 1:ncol(results)) {
+    if (!is.na(results[i, j]) && results[i, j] >= value) {
+      row_name <- rownames(results)[i]
+      col_name <- colnames(results)[j]
+      count <- count + 1
+      print(paste(count, row_name, col_name, results[i, j], sep = ", "))
+   } else {
+     # Code to execute if val is less than 4
+  }
+    
+  }
+}
+}
+#print_all_values_greater_than(0.5, results)
+```
+
+
+
+```{r}
+# analysis of results from pearson correlation data 
+library(readxl)
+compound_annotation_df <- read.csv("/Users/efraimshine/Desktop/gdsc_data/screened_compounds.csv")
+drug_gene_r_correlations_at_least_50_points_per_pair <- read_excel("/Users/efraimshine/Desktop/gdsc_data/drug_gene_r_correlations_at_least_50_points_per_pair.xlsx")
+# Merge the data frames based on the "DRUG_ID" column
+merged_df_at_least_50_pairs_correlations <- merge(drug_gene_r_correlations_at_least_50_points_per_pair, compound_annotation_df, by = "DRUG_ID", all.x = TRUE)
+
+
+merged_df_at_least_50_pairs_correlations
+merged_df_at_least_50_pairs_correlations_with_pvalue <- add_pvlaue_for_correlations_df(merged_df_at_least_50_pairs_correlations,gdsc_ic50_df,proteomics_z_score)
+merged_df_at_least_50_pairs_correlations_with_pvalue
+
+# extract_numbers <- function(str) {
+#   as.numeric(gsub("[^0-9]", "", str))
+# }
+
+# plot((extract_numbers(merged_df_at_least_50_pairs_correlations_with_pvalue$pearson_value)),as.integer(-log10(merged_df_at_least_50_pairs_correlations_with_pvalue$pvalue)))
+
+ hist(-log10(merged_df_at_least_50_pairs_correlations_with_pvalue$pvalue),main = "-log10 P value - proteomics vs IC50 Pearson correlations", xlab = "-log10 P value")
+ 
+
+
+
+# Replace the NA values in the target columns with the merged data
+drug_gene_r_correlations_at_least_50_points_per_pair <- merged_df
+#UNC0638_df <- merged_df %>% filter(DRUG_ID =="2038")
+#UNC0638_df %>% select(uniprot_id)
+#compaound_annotation_df
+#drug_gene_r_correlations_at_least_50_points_per_pair
+
+pearson_correlation_pvalue_for_gene_drug_pair <- function(protein_id, drug_id, ic50_df, proteomics_df){
+  gene_proteomics <- get_gene_proteomics_df(proteomics_df, protein_id)
+  ic50_drug <- get_ic50_df_for_drug(drug_id,ic50_df)
+  merged_df <- gene_drug_pair_df(gene_proteomics, ic50_drug)
+  pearson_corr_info <- cor.test(merged_df[,2],merged_df[,3],method = "pearson")
+  pearson_corr <- pearson_corr_info$estimate
+  pearson_corr_pvalue <- pearson_corr_info$p.value
+  return(pearson_corr_pvalue)
+}
+
+```
+
+
+
+```{r}
+# x <- c(2,4,3,2,7,2,3,3,4)
+# y<- c(3,4,6,2,4,7,3,3,3)
+# test <- cor.test(x,y,method = "pearson")
+# test_df <- data.frame(X=x,Y=y)
+# test_df
+# test_df$X <- test
+# test_df$Y[2]
+# test$p.value
+g6pd_prot <- get_gene_proteomics_df(proteomics_z_score,"P11413")
+
+
+P00390_data <- get_gene_proteomics_df(proteomics_z_score,"P15559")
+stressed_df <- merge(g6pd_prot,P00390_data,by = "uniprot_id") %>% filter(P15559 >-10)
+
+b_oxidation_1 <- get_gene_proteomics_df(proteomics_z_score,"P49327")
+g6pd_1_merged <- merge(stressed_df,b_oxidation_1,by = "uniprot_id")
+
+g6pd_1_merged
+cor.test(g6pd_1_merged$P11413,g6pd_1_merged$P49327)
+plot(g6pd_1_merged$P11413,g6pd_1_merged$P49327,xlab = "G6PD Proteomics",ylab = "FASN Proteomics",main = "G6PD vs FASN in cancer cell lines")
+```
+
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
