@@ -7,92 +7,73 @@ This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute
 
 Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
 
-K-mean clustering 
 ```{r}
-#loading genomic CNA information from gdsc_data_analysis.Rmd
-#total_cna_data_organized
-
-#1. K-Means Clustering
-#K-Means is a popular clustering method that partitions the data into a specified number of clusters. Here’s how to use it in R:
-
-
-# Load necessary libraries
-library(tidyverse)
-
-# Assuming `data` is your matrix with genes as rows and treatments as columns
-#data <- read.csv("path_to_your_data.csv", row.names = 1)
-data <- cluster_genomic_data_mat
-
-# Scale data (important for K-Means)
-scaled_data <- scale(data)
-
-# Set number of clusters
-num_clusters <- 2
-
-# Perform K-Means clustering
-set.seed(123) # For reproducibility
-kmeans_result <- kmeans(na.omit(data), centers = num_clusters)
-
-# Add cluster assignments to your data
-data$cluster <- as.factor(kmeans_result$cluster)
-
-# View the results
-#print(kmeans_result)
-
+library(dplyr)
+library(readr)
+library(tidyr) 
 ```
 
 
-
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
 ```{r}
-library(magick)
-library(Cairo)
-##explore ic50 clusteres genomucis - organizing data- ploting data
-cluster_heatmap <-  Heatmap(na.omit(cluster_genomic_data_mat), 
-        name = "cluster genomics",  # Name for the heatmap legend
-        col = colorRamp2(c(0, 1, 2), c("red", "white","blue")), na_col = "gray",  # Define color scale
-        show_row_names = FALSE,# use_raste = TRUE, raster_resize_mat = TRUE,  # Show row names (genes)
-        show_column_names = FALSE,  # Show column names (samples)
-        cluster_rows = TRUE,  # Cluster rows (genes)
-        cluster_columns = TRUE,  # Cluster columns (samples)
-        row_dend_side = "left",  # Position of row dendrogram
-        column_dend_side = "top",  # Position of column dendrogram
-        heatmap_legend_param = list(title = "Z_score_IC50",  # Customize the legend
-                                    title_position = "topcenter", 
-                                    legend_direction = "vertical"),row_km = 10, row_km_repeats = 1)
-#cluster_heatmap
-
-
-
-png("/Users/efraimshine/Desktop/gdsc_data/heatmap_example.png", width = 800, height = 600)
-draw(cluster_heatmap)
-dev.off()
-htShiny(cluster_heatmap)
-
-
-```
-```{r}
-genes_of_interst <- back_to_df %>% filter(row.names(back_to_df) %in% c("UGT2B17","APOBEC3A_B","APOBEC3B","APOBEC3G"))
-View(genes_of_interst)
-genes_of_interst
-```
-
-
-
-
-mutation cell line file 
-```{r}
-#mutation_file <- read.csv("/Users/efraimshine/Downloads/mutations_all_20230202.csv")
-head(mutation_file)
-```
-proteomics data 
-```{r}
-proteomics_z_score <- read_tsv("/Users/efraimshine/Downloads/Proteomics_20221214/Protein_matrix_averaged_zscore_20221214.tsv")
+proteomics_z_score <- read_tsv("~/workspace/ai_agent_lab_data/GDSC/Proteomics/Protein_matrix_averaged_zscore_20221214.tsv")
 proteomics_z_score
+
+#points(high_prot_ic50,col = "red")
+#points(low_prot_ic50,col = "blue")
+
+```
+```{r}
+model_mapping <- read.csv("~/workspace/ai_agent_lab_data/depmap/Model.csv")
+model_mapping
+```
+```{r}
+proteomics_z_score_with_depmap_id <- proteomics_z_score %>%
+  left_join(model_mapping %>% select(SangerModelID, depmap_id = ModelID), 
+            by = c("model_id" = "SangerModelID")) %>%
+  relocate(depmap_id, .before = everything()) 
+proteomics_z_score_with_depmap_id
+```
+
+
+```{r}
+intersection <- intersect(proteomics_z_score$model_id, model_mapping$SangerModelID)
+na_count <- sum(is.na(proteomics_z_score$model_id))
+length(intersection)
+na_count
+```
+
+
+```{r}
+
+#cnv_file <- "~/workspace/ai_agent_lab_data/GDSC/GDSC2_fitted_dose_response_27Oct23.csv"
+gdsc_from_depmap_file <- "~/workspace/ai_agent_lab_data/GDSC/sanger-dose-response.csv"
+
+# Read the CNV data CSV file, assuming the first two rows contain headers
+gdsc_from_depmap <- read.csv(gdsc_from_depmap_file)
+```
+
+
+```{r}
+gdsc_from_depmap$log2_ic50 <- log2(gdsc_from_depmap$IC50_PUBLISHED)
+gdsc_from_depmap
+gdsc1_pre_filtered <- gdsc_from_depmap %>% filter(DATASET == "GDSC1") 
+gdsc1 <- gdsc_from_depmap %>% filter(DATASET == "GDSC1")  %>%
+  filter(!is.na(ARXSPAN_ID) & ARXSPAN_ID != "")
+gdsc1
+
+```
+```{r}
+gdsc1_drug_sensitivity_for_proteomics <- gdsc1 %>% pivot_wider(id_cols=DRUG_ID, names_from = ARXSPAN_ID, values_from = Z_SCORE_PUBLISHED)
+gdsc1_drug_sensitivity_for_proteomics
+```
+
+
+```{r}
+library("dplyr")
 dpyd_proteomics <- proteomics_z_score %>% select(uniprot_id,Q12882) %>% filter(uniprot_id != "symbol",uniprot_id != "model_name") %>% mutate(Q12882 = as.numeric(Q12882)) %>% arrange(desc(Q12882)) %>% filter()
 low_level_dpyd_proteomics <- dpyd_proteomics %>% filter(Q12882 < 0) %>% as.data.frame() 
 high_level_dpyd_proteomics <- dpyd_proteomics %>% filter(Q12882 >0) %>% as.data.frame()
-df_ic50 <- as.data.frame(matrix_data) %>% filter(rownames(df_ic50) == 1073)
+df_ic50 <- as.data.frame(gdsc1_drug_sensitivity_for_proteomics) %>% filter(rownames(df_ic50) == 1073)
 
 common_cell_lines_low <- intersect(low_level_dpyd_proteomics$uniprot_id, colnames(df_ic50))
 common_cell_lines_high <- intersect(high_level_dpyd_proteomics$uniprot_id, colnames(df_ic50))
@@ -106,10 +87,8 @@ low_prot_ic50 <- df_ic50 %>% select(all_of(common_cell_lines_low)) %>% filter(ro
 
 boxplot(high_prot_ic50,low_prot_ic50)
 t.test(high_prot_ic50,low_prot_ic50)
-#points(high_prot_ic50,col = "red")
-#points(low_prot_ic50,col = "blue")
-
 ```
+
 ```{r}
 # proteomics functions 
 get_gene_proteomics_df <- function(proteomics_z_score_df,protein_id) {
@@ -235,6 +214,16 @@ add_pvlaue_for_correlations_df <- function(gene_drug_correlation_df,ic50_df, pro
   }
   return(df_with_pvalue)
 }
+
+```
+
+
+```{r}
+calculate_correlation_for_all_drugs(gdsc1_drug_sensitivity_for_proteomics, proteomics_z_score_with_depmap_id, 50)
+```
+
+
+```{r}
 #debug(add_pvlaue_for_correlations_df)
 add_pvlaue_for_correlations_df(merged_df_at_least_50_pairs_correlations,gdsc_ic50_df,proteomics_z_score)
 
@@ -297,6 +286,7 @@ is_num_of_non_NA_pairs(200,ic50_ordered,drug_ic50_vector)
 #correlation_df
 #pearson_correlation_pvalue_for_gene_grug_pair("Q15149","1784", gdsc_ic50_df, proteomics_z_score)
 ```
+
 ```{r}
 vikash_df <- read_tsv("/Users/efraimshine/Downloads/GSE273196_norm_counts_TPM_GRCh38.p13_NCBI.tsv")
 

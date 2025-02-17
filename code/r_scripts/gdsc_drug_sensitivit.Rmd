@@ -14,7 +14,7 @@ install.packages("tidyr")
 library(dplyr)
 library(readr)
 #cnv_file <- "~/workspace/ai_agent_lab_data/GDSC/GDSC2_fitted_dose_response_27Oct23.csv"
-gdsc_from_depmap_file <- "C:\\Users\\sarameirab\\Desktop\\sanger-dose-response.csv"
+gdsc_from_depmap_file <- "~/workspace/ai_agent_lab_data/GDSC/sanger-dose-response.csv"
 
 # Read the CNV data CSV file, assuming the first two rows contain headers
 gdsc_from_depmap <- read.csv(gdsc_from_depmap_file)
@@ -37,6 +37,16 @@ gdsc2_pre_filtered
 gdsc2
 
 ```
+
+
+```{r}
+hist(gdsc1_pre_filtered$Z_SCORE_PUBLISHED)
+hist(gdsc1_pre_filtered$IC50_PUBLISHED)
+hist(gdsc1_pre_filtered$log2_ic50)
+
+
+```
+
 
 ```{r}
 library(tidyr)
