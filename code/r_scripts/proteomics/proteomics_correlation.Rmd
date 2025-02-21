@@ -10,7 +10,7 @@ Try executing this chunk by clicking the *Run* button within the chunk or by pla
 ```{r}
 library(dplyr)
 library(readr)
-library(tidyr) 
+library(tidyr)
 ```
 
 
@@ -68,26 +68,92 @@ gdsc1_drug_sensitivity_for_proteomics
 ```
 
 
+
 ```{r}
-library("dplyr")
-dpyd_proteomics <- proteomics_z_score %>% select(uniprot_id,Q12882) %>% filter(uniprot_id != "symbol",uniprot_id != "model_name") %>% mutate(Q12882 = as.numeric(Q12882)) %>% arrange(desc(Q12882)) %>% filter()
-low_level_dpyd_proteomics <- dpyd_proteomics %>% filter(Q12882 < 0) %>% as.data.frame() 
-high_level_dpyd_proteomics <- dpyd_proteomics %>% filter(Q12882 >0) %>% as.data.frame()
-df_ic50 <- as.data.frame(gdsc1_drug_sensitivity_for_proteomics) %>% filter(rownames(df_ic50) == 1073)
+# Function to calculate correlation and other statistics for each protein-drug pair
+# Function to calculate correlation and other statistics for each protein-drug pair
+calculate_protein_drug_correlation <- function(proteomics_df, drug_sensitivity_df) {
+  # Remove the first two rows (header and empty row) from proteomics data
+  proteomics_df <- proteomics_df[3:nrow(proteomics_df),]
+  
+  # Convert proteomics values to numeric
+  for(col in colnames(proteomics_df)[-(1:3)]) {
+    proteomics_df[[col]] <- as.numeric(proteomics_df[[col]])
+  }
+  
+  results <- data.frame(
+    protein_id = character(),
+    drug_id = character(),
+    correlation = numeric(),
+    p_value = numeric(),
+    cell_line_count = integer(),
+    mean_sensitivity = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Ensure depmap_id columns are aligned
+  common_depmap_ids <- intersect(proteomics_df$depmap_id, colnames(drug_sensitivity_df)[-1])
+  proteomics_df <- proteomics_df %>% filter(depmap_id %in% common_depmap_ids)
+  drug_sensitivity_df <- drug_sensitivity_df %>% select(DRUG_ID, all_of(common_depmap_ids))
+  
+  # Loop through each protein and drug
+  for (protein in colnames(proteomics_df)[-(1:3)]) {
+    for (drug_row in 1:nrow(drug_sensitivity_df)) {
+      drug_id <- drug_sensitivity_df$DRUG_ID[drug_row]
+      drug_values <- as.numeric(drug_sensitivity_df[drug_row, -1])
+      protein_values <- proteomics_df[[protein]]
+      
+      # Create data frame for correlation
+      merged_data <- data.frame(
+        protein_value = protein_values,
+        drug_value = drug_values
+      ) %>% filter(!is.na(protein_value) & !is.na(drug_value))
+      
+      # Calculate correlation and statistics
+      if (nrow(merged_data) > 2) {
+        correlation_test <- cor.test(merged_data$protein_value, 
+                                   merged_data$drug_value, 
+                                   method = "pearson")
+        correlation <- correlation_test$estimate
+        p_value <- correlation_test$p.value
+      } else {
+        correlation <- NA
+        p_value <- NA
+      }
+      
+      # Calculate mean sensitivity
+      mean_sensitivity <- mean(merged_data$drug_value, na.rm = TRUE)
+      
+      # Append results
+      results <- rbind(results, data.frame(
+        protein_id = protein,
+        drug_id = drug_id,
+        correlation = correlation,
+        p_value = p_value,
+        cell_line_count = nrow(merged_data),
+        mean_sensitivity = mean_sensitivity,
+        stringsAsFactors = FALSE
+      ))
+    }
+  }
+  
+  return(results)
+}
 
-common_cell_lines_low <- intersect(low_level_dpyd_proteomics$uniprot_id, colnames(df_ic50))
-common_cell_lines_high <- intersect(high_level_dpyd_proteomics$uniprot_id, colnames(df_ic50))
+# Calculate correlations
+results <- calculate_protein_drug_correlation(proteomics_z_score_with_depmap_id, 
+                                           gdsc1_drug_sensitivity_for_proteomics)
 
-ic50_mat_selected_dpyd_low_cells <- df_ic50 %>% select(all_of(common_cell_lines_low)) %>% as.matrix()
-ic50_mat_selected_dpyd_low_cells
-#df_ic50 #%>% filter(rownames(df_ic50) == 1073)
+write.csv(results, "~/workspace/proteomics_correlation.csv", row.names = FALSE)
 
-high_prot_ic50 <- df_ic50 %>% select(all_of(common_cell_lines_high)) %>% filter(rownames(df_ic50) == 1073) %>% as.matrix() %>% c()
-low_prot_ic50 <- df_ic50 %>% select(all_of(common_cell_lines_low)) %>% filter(rownames(df_ic50) == 1073) %>% as.matrix() %>% c()
 
-boxplot(high_prot_ic50,low_prot_ic50)
-t.test(high_prot_ic50,low_prot_ic50)
+# View results
+head(results)
 ```
+```{r}
+results %>% filter(correlation >0.5 & cell_line_count >20)
+```
+
 
 ```{r}
 # proteomics functions 
@@ -120,7 +186,7 @@ get_ic50_for_specified_cells <- function(ic50_df,cell_lines_vector){
 }
 
 get_proteomics_for_specified_cells <- function(proteomics_df, cell_lines_vector){
-  proteomics_for_inpute_cell_lines <- proteomics_df[proteomics_df$uniprot_id %in% cell_lines_vector, ]
+  proteomics_for_inpute_cell_lines <- proteomics_df[proteomics_df$depmap_id %in% cell_lines_vector, ]
   return(proteomics_for_inpute_cell_lines)
 }
 
@@ -219,7 +285,8 @@ add_pvlaue_for_correlations_df <- function(gene_drug_correlation_df,ic50_df, pro
 
 
 ```{r}
-calculate_correlation_for_all_drugs(gdsc1_drug_sensitivity_for_proteomics, proteomics_z_score_with_depmap_id, 50)
+correlations <- calculate_correlation_for_all_drugs(order_ic50_df(gdsc1_drug_sensitivity_for_proteomics), proteomics_z_score_with_depmap_id, 50)
+correlations
 ```
 
 
