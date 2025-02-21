@@ -1,87 +1,74 @@
 import pandas as pd
-import gdown
-import requests
+from urls import *
+from utils import *
 
 
-def map_uniprot_to_gene(protein_ids):
-    """
-    Map UniProt protein IDs to gene names using UniProt's mapping service
 
-    Args:
-        protein_ids (list): List of UniProt protein IDs
-
-    Returns:
-        dict: Mapping of protein IDs to gene names
-    """
-    # Join protein IDs with spaces
-    ids = ' '.join(protein_ids)
-
-    # Configure the UniProt API request
-    url = 'https://rest.uniprot.org/idmapping/run'
-    params = {
-        'from': 'UniProtKB_AC-ID',
-        'to': 'Gene_Name',
-        'ids': ids
-    }
-
-    try:
-        # Submit the mapping job
-        response = requests.post(url, data=params)
-        response.raise_for_status()  # Raise exception for bad status codes
-        job_id = response.json()['jobId']
-
-        # Get the results
-        result_url = f'https://rest.uniprot.org/idmapping/stream/{job_id}'
-        results = requests.get(result_url)
-        results.raise_for_status()
-
-        # Parse the results - updated format
-        mapping = {}
-        result_data = results.json()
-
-        if 'results' in result_data:
-            for entry in result_data['results']:
-                mapping[entry['from']] = entry.get('to', '')
-        else:
-            # Handle new API format
-            for entry in result_data:
-                from_id = entry.get('from', '')
-                to_name = entry.get('to', {}).get('geneName', '')
-                if from_id and to_name:
-                    mapping[from_id] = to_name
-
-        return mapping
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error during API request: {e}")
-        return {}
-    except KeyError as e:
-        print(f"Error parsing API response: {e}")
-        print("API Response:", results.text[:200])  # Print first 200 chars of response
-        return {}
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        return {}
 
 
 # ...rest of your code remains the same...
 
 # Download and read file using gdown
-url = 'https://drive.google.com/uc?id=1_fIcLz6aUNHUtrQV6CpFo2ccToRlFLDw'
-output = 'data.csv'
-gdown.download(url, output, quiet=False)
+path = download_url(PROTEOMICS_CORRELATION_URL)
+depmap_gdscs_merged_ttest_path = download_url(DEPMAP_GDSC1_TTEST_ALL_MERGED)
 
 # Read the downloaded CSV
-df = pd.read_csv(output)
+proteomics_df = pd.read_csv(path)
 
 # Get unique protein IDs from your data
-protein_ids = df['protein_id'].unique().tolist()
+protein_ids = proteomics_df['protein_id'].unique().tolist()
 
 # Map proteins to genes
 protein_to_gene = map_uniprot_to_gene(protein_ids)
 
 # Add gene names to your DataFrame
-df['gene_name'] = df['protein_id'].map(protein_to_gene)
+proteomics_df['gene_name'] = proteomics_df['protein_id'].map(protein_to_gene)
 
-# Display first few rows with new gene names
-print(df.head())
+
+pd.set_option('display.max_columns', 50)
+pd.set_option('display.width', None)
+
+# Display first 10 rows where cell_line_count > 2
+print(proteomics_df.loc[proteomics_df['cell_line_count'] > 2].head(10))
+
+depmap_gdscs_merged_ttest_path = pd.read_csv(depmap_gdscs_merged_ttest_path)
+depmap_gdscs_merged_ttest_path['clean_gene'] = depmap_gdscs_merged_ttest_path['mutation'].str.extract(r'(.*?)\s*\(\d+\)')[0]
+
+proteomics_df.columns = ['proteomics_' + col if col != 'gene_name' else col for col in proteomics_df.columns]
+
+
+# Perform the merge
+merged_df = proteomics_df.merge(
+    depmap_gdscs_merged_ttest_path,
+    left_on=['gene_name', 'proteomics_drug_id'],
+    right_on=['clean_gene', 'gdsc1_drug'],
+    how='inner'
+)
+
+
+# Display results
+print("\nFirst few rows of merged dataframe:")
+merged_df = merged_df.drop(['clean_gene'], axis=1)
+print(merged_df.head())
+print(f"DataFrame dimensions (rows, columns): {merged_df.shape}")
+
+
+
+filtered_df = merged_df[
+    ((merged_df['proteomics_correlation'] > 0.2) | (merged_df['proteomics_correlation'] < -0.2)) &
+    (merged_df['gdsc1_p_value'] < 0.1) &
+    (merged_df['depmap_p_value'] < 0.1) & (merged_df['proteomics_p_value'] < 0.1)
+]
+
+
+# Set display options for better visibility
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_rows', None)
+print("\nFiltered results:")
+print(filtered_df)
+print(f"\nNumber of rows meeting criteria: {len(filtered_df)}")
+
+# Write merged DataFrame to CSV
+output_path = "proteomics_gdsc1_depmap_lof_merge_all.csv"
+merged_df.to_csv(os.path.expanduser(output_path), index=False)
+print(f"\nMerged data written to: {output_path}")
