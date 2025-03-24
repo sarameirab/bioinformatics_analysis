@@ -1,2 +1,5 @@
 gdown
 pandas
+scipy
+matplotlib
+seaborn

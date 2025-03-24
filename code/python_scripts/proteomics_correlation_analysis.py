@@ -69,6 +69,6 @@ print(filtered_df)
 print(f"\nNumber of rows meeting criteria: {len(filtered_df)}")
 
 # Write merged DataFrame to CSV
-output_path = "proteomics_gdsc1_depmap_lof_merge_all.csv"
+output_path = "proteomics_gdsc1_depmap_lof_merge_all_2.csv"
 merged_df.to_csv(os.path.expanduser(output_path), index=False)
 print(f"\nMerged data written to: {output_path}")
