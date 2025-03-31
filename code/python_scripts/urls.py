@@ -8,11 +8,13 @@ DEPMAP_TTEST = 'https://drive.google.com/file/d/1sAC4mm8xfAfGvSV-wCvB5yuyxaUjvJR
 DEPMAP_GDS1_TTEST_TOP_HITS_MERGED = 'https://drive.google.com/file/d/1g3GOx_bu2nAIt9pj0RBXl9Uz-Xphf0Zn'
 DEPMAP_GDSC1_TTEST_ALL_MERGED = 'https://drive.google.com/file/d/104VMExALrb3XjGkZK_aAKdtnzqAWmFNl'
 
-
+DEPMAP_MUTATION_DATA = 'https://drive.google.com/file/d/1iedYFEZoDZxIrBZys8LXAmzD79DMIKsA'
 # proteomics data taken from https://depmap.sanger.ac.uk/documentation/datasets/proteomics/
 PROTEOMICS_MATRIX_AVERAGE_ZSCORE = 'https://drive.google.com/file/d/10Vonswa_Cp5zAWsqvs7k0rNLVbM100v7'
 GDSC1_DOSE_RESPONSE = 'https://drive.google.com/file/d/1XyJyM2ToI1U1I29ZwTYL2WSkNfmg275f'
 DEPMAP_MODEL_MAPPING='https://drive.google.com/file/d/1oAcdxGsHXq9KZ4U7I1SeYOflLkhxWWKE'
+
+PRISM_DRUG_REPURPOSING = 'https://drive.google.com/file/d/1DcvKjdJlKE6zy1vHdw-8iHPn3cxF_QvY'
 
 def download_url(url):
     """
