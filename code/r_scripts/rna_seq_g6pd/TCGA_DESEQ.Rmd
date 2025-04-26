@@ -4,9 +4,19 @@ output: html_notebook
 ---
 
 This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+```{r}
+library("UCSCXenaTools")
+library("R.utils")
+library("dplyr")
+library("data.table")
+library("readr")
+library("edgeR")
+setwd("/Users/efraimshine/Desktop/rna_seq/TCGA")
+samples_gene_expression = fread("TcgaTargetGtex_gene_expected_count.gz");
 
+```
 Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
-
+~/workspace/bioinformatics_analysis/code/r_scripts/rna_seq_g6pd/TCGA_DESEQ.Rmd
 ```{r}
 setwd("/Users/efraimshine/Desktop/rna_seq/TCGA")
 
@@ -22,17 +32,7 @@ XenaQuery(GeneExpectedCnt_toil) %>%
 ```
 
 
-```{r}
-library("UCSCXenaTools")
-library("R.utils")
-library("dplyr")
-library("data.table")
-library("readr")
-library("edgeR")
-setwd("/Users/efraimshine/Desktop/rna_seq/TCGA")
-samples_gene_expression = fread("TcgaTargetGtex_gene_expected_count.gz");
 
-```
 
 ```{r}
 setwd("/Users/efraimshine/Desktop/rna_seq/TCGA")
@@ -249,12 +249,20 @@ library(AnnotationDbi)
 ```{r}
 # results as in tutorial notebook
 sigs <- na.omit(res)
-sigs
+sigs 
 sigs <- sigs[sigs$padj < 0.05 & sigs$baseMean > 50,]
 sigs
 genes_to_test <- rownames(sigs[sigs$log2FoldChange > 0.5,]) 
 
 genes_to_test_no_dots <- gsub("\\..*", "", genes_to_test)
+
+
+res_for_gsea <- res[res$baseMean > 50,] 
+res_for_gsea <- res_for_gsea[order(-res_for_gsea$stat),]
+res_for_gsea 
+
+genes_for_gsea <- res_for_gsea$stat
+names(genes_for_gsea) <- gsub("\\..*", "", rownames(res_for_gsea))
 
 
 
@@ -268,6 +276,26 @@ path_df_enrich <- as.data.frame(GO_results)
 
 
 ```
+
+
+```{r}
+gsea_res <- gseGO(genes_for_gsea,
+             ont = "BP",
+             keyType = "ENSEMBL",
+             OrgDb = "org.Hs.eg.db",
+             eps = 1e-300)
+```
+```{r}
+as.data.frame(gsea_res)
+```
+```{r}
+fit_gsea <- gseaplot(gsea_res, geneSetID = "GO:0006635",title = "fatty acid beta-oxidation")
+fit_gsea
+
+```
+
+
+
 ```{r}
 fit <- plot(barplot(GO_results, showCategory = 20))
 png("out.png", res = 250, width = 1400, height = 1800)

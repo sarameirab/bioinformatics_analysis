@@ -1,0 +1,328 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+```{r}
+library("UCSCXenaTools")
+library("R.utils")
+library("dplyr")
+library("data.table")
+library("readr")
+library("edgeR")
+setwd("/Users/efraimshine/Desktop/rna_seq/TCGA")
+samples_gene_expression = fread("TcgaTargetGtex_gene_expected_count.gz");
+
+```
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+~/workspace/bioinformatics_analysis/code/r_scripts/rna_seq_g6pd/TCGA_DESEQ.Rmd
+```{r}
+setwd("/Users/efraimshine/Desktop/rna_seq/TCGA")
+
+data("XenaData")
+write.csv(XenaData, "00_tblXenaHubInfo.csv")
+
+## step 5-a
+GeneExpectedCnt_toil = XenaGenerate(subset = XenaHostNames == "toilHub") %>%
+  XenaFilter(filterCohorts = "TCGA TARGET GTEx") %>%
+  XenaFilter(filterDatasets = "TcgaTargetGtex_gene_expected_count");
+XenaQuery(GeneExpectedCnt_toil) %>%
+  XenaDownload(destdir = "./")
+```
+
+
+
+
+```{r}
+setwd("/Users/efraimshine/Desktop/rna_seq/TCGA")
+create_back_transformed_df <- function(sample_file, gene_expression_data) {
+  # Read the sample list
+  list_data <- read.csv(sample_file, header = FALSE)
+  vector_data <- list_data$V1
+
+  # Filter out excluded samples
+  filtered_vector <- vector_data[vector_data %in% colnames(gene_expression_data)]
+
+
+  # Filter the gene expression data
+  filtered_df <- gene_expression_data %>% select("sample", all_of(filtered_vector))
+  rownames(filtered_df) <- filtered_df$sample
+  
+  # Backtransform the numeric columns
+  backtransformed_df <- filtered_df %>%
+    mutate(across(where(is.numeric), ~ 2^. - 1))
+  rownames(backtransformed_df) <- backtransformed_df$sample
+  # Set row names and remove the first column
+
+  return(backtransformed_df)
+}
+
+g6pd_deleted_samples_file <- "g6pd_deleted_samples.csv"
+#sample_file_g6pd_control_normal_expression_file = "g6pd_normal_samples_control_group.csv"
+sample_file_g6pd_control_normal_expression_file = "G6PD_normal_cancer_type_based_selection.csv"
+
+# Call the function and store the result
+g6pd_del_df <- create_back_transformed_df(g6pd_deleted_samples_file, samples_gene_expression)
+g6pd_normal_control_df <- create_back_transformed_df(sample_file_g6pd_control_normal_expression_file, samples_gene_expression)
+head(g6pd_normal_control_df[, 1:10], 10)
+head(g6pd_del_df[, 1:10], 10)
+g6pd_normal_control_df
+g6pd_del_df
+
+```
+```{r}
+# checking control data frame samples
+# ctr_rnames <- colnames(g6pd_normal_control_df[,-1])
+# ctr_orig_df <- read.csv("/Users/efraimshine/Desktop/rna_seq/TCGA/g6pd_high_exp_1.75to2.25_z_score_samples_names.csv")
+# ctr_orig_df
+# ctr_rnames
+# common_names <- intersect(ctr_rnames,ctr_orig_df$Sample.ID)
+# common_names
+# print(common_names)
+
+```
+
+
+
+```{r}
+# Define the arguments
+library("data.table")
+library("readr")
+library("dplyr")
+library("edgeR")
+
+
+
+
+# Add prefixes to column names
+colnames(g6pd_del_df) <- paste0("DELE_", colnames(g6pd_del_df))
+colnames(g6pd_normal_control_df) <- paste0("NORM_", colnames(g6pd_normal_control_df))
+
+# Combine the data frames by rows
+merged_df <- merge(g6pd_del_df, g6pd_normal_control_df, by.x="DELE_sample",by.y = "NORM_sample")
+colnames(merged_df)[colnames(merged_df) == "DELE_sample"] <- "sample"
+# rownames(merged_df) <- merged_df$sample
+# merged_df$sample <- NULL
+
+# rownames(g6pd_del_df) <- g6pd_del_df$DELE_sample
+# g6pd_del_df$DELE_sample <- NULL
+
+# rownames(g6pd_normal_control_df) <- g6pd_normal_control_df$NORM_sample
+# g6pd_normal_control_df$NORM_sample <- NULL
+merged_df
+
+
+```
+
+
+```{r}
+merged_df_rownames <- merged_df[,-1]
+rownames(merged_df_rownames) <- merged_df$sample
+# merged_df_round_vector <- lapply(merged_df_rownames, round , digits = 2)
+# merged_df_rownames_rounded <- data.frame(merged_df_round_vector)
+#rownames(merged_df_rownames_rounded) <- rownames(merged_df_rownames)
+merged_df_rownames_rounded <- merged_df_rownames %>% mutate(across(where(is.numeric), round, digits = 0))
+matrix_for_deseq <- as.matrix(merged_df_rownames_rounded)
+rownames(matrix_for_deseq) <- rownames(merged_df_rownames_rounded)
+merged_df_rownames
+merged_df_rownames_rounded
+```
+
+
+
+```{r}
+
+setwd("/Users/efraimshine/Desktop/rna_seq/TCGA")
+
+metadata <- data.frame(sample_names <- colnames(merged_df[,-1]))
+#row.names(metadata) <- colnames(merged_df)
+  metadata <- mutate(metadata, G6PD_STATUS = ifelse(row_number() <= length(g6pd_del_df[,-1]), "del", "normal"))
+
+metadata_rnames <- metadata
+rownames(metadata_rnames) <- metadata$sample_names....colnames.merged_df
+metadata_rnames$sample_names....colnames.merged_df....1.. <- NULL
+metadata
+metadata_rnames
+
+
+
+```
+
+```{r}
+# metadata <- mutate(metadata, G6PD_STATUS = ifelse(row_number() <= length(g6pd_del_df[,-1]), "del", "normal"))
+
+setwd("/Users/efraimshine/Desktop/rna_seq/TCGA")
+metadata_rnames_for_info_merge <- metadata_rnames
+metadata_rnames_for_info_merge
+#expanding meta data information for analysis of g6pd deleted samples VS 200 g6pd normal samples from the center of g6pd expression information
+library("dplyr")
+
+samples_info_deleted_vs_200_patients <- read_tsv("g6pd_samples_info_deleted_vs_two_hundreds.tsv") 
+samples_info_deleted_vs_200_patients <- as.data.frame(samples_info_deleted_vs_200_patients) %>% dplyr::select(`Sample ID`,`Cancer Type`,`Cancer Type Detailed`)
+
+# merege metadata with info df
+row.names(metadata_rnames_for_info_merge) <- gsub("^[^_]*_", "", row.names(metadata_rnames_for_info_merge))
+
+metadata_rnames_merged_with_info <- merge(metadata_rnames_for_info_merge,samples_info_deleted_vs_200_patients, by.x = "row.names", by.y = "Sample ID",all.x = TRUE)
+row.names(metadata_rnames_merged_with_info) <- metadata_rnames_merged_with_info$Row.names
+metadata_rnames_merged_with_info$Row.names <- NULL
+metadata_rnames_merged_with_info <- metadata_rnames_merged_with_info[order(metadata_rnames_merged_with_info$G6PD_STATUS), ]
+metadata_rnames_merged_with_info_orderd <- metadata_rnames_merged_with_info[match(row.names(metadata_rnames_for_info_merge), row.names(metadata_rnames_merged_with_info)), ]
+
+row.names(metadata_rnames_merged_with_info_orderd) <- row.names(metadata_rnames)
+colnames(metadata_rnames_merged_with_info_orderd)[2] <- "cancer_type"
+colnames(metadata_rnames_merged_with_info_orderd)[3] <- "cancer_type_detailed"
+
+metadata_rnames_merged_with_info_orderd$cancer_type <- as.factor(metadata_rnames_merged_with_info_orderd$cancer_type)
+metadata_rnames_merged_with_info_orderd$cancer_type_detailed <- as.factor(metadata_rnames_merged_with_info_orderd$cancer_type_detailed)
+metadata_rnames_merged_with_info
+metadata_rnames_merged_with_info_orderd
+
+```
+
+
+
+
+```{r}
+names_df <- as.data.frame(data_col <- colnames(matrix_for_deseq),metadatarows <- rownames(metadata_rnames))
+names_df$`data_col <- colnames(matrix_for_deseq)` == rownames(names_df)
+names_df
+```
+
+
+```{r}
+library("DESeq2")
+dds <- DESeqDataSetFromMatrix(countData = matrix_for_deseq,
+                              colData = metadata_rnames,
+                              design = ~ G6PD_STATUS)
+dds$G6PD_STATUS <- relevel(dds$G6PD_STATUS, ref = "normal")
+dds
+```
+```{r}
+dds <- DESeq(dds)
+res <- results(dds)
+res
+```
+
+```{r}
+resultsNames(dds)
+
+```
+```{r}
+resOrdered <- res[order(res$pvalue),]
+summary(res)
+```
+```{r}
+sum(res$padj < 0.05, na.rm=TRUE)
+```
+```{r}
+res05 <- results(dds, alpha=0.05)
+summary(res05)
+```
+```{r}
+plotMA(res, ylim=c(-2,2))
+```
+```{r}
+resSig <- subset(resOrdered, padj < 0.05)
+resSig
+write.csv(as.data.frame(resSig), 
+          file="/Users/efraimshine/Desktop/rna_seq/TCGA/G6PD_abovepadj_0.05.csv")
+```
+```{r}
+#filtering the results
+results_df <- read.csv("/Users/efraimshine/Desktop/rna_seq/TCGA/G6PD_abovepadj_0.05.csv")
+results_df
+results_filtered <- results_df %>% filter(log2FoldChange >0 ,padj < 0.05)
+results_filtered
+write.csv(as.data.frame(results_filtered), 
+          file="/Users/efraimshine/Desktop/rna_seq/TCGA/deseq2_res_g6pd/G6PD_results_filtered.csv")
+```
+```{r}
+# clustering
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+```
+
+
+```{r}
+# results as in tutorial notebook
+sigs <- na.omit(res)
+sigs
+sigs <- sigs[sigs$padj < 0.05 & sigs$baseMean > 50,]
+sigs
+genes_to_test <- rownames(sigs[sigs$log2FoldChange > 0.5,]) 
+
+genes_to_test_no_dots <- gsub("\\..*", "", genes_to_test)
+
+
+
+
+
+```
+```{r}
+#GO analysis
+GO_results <- enrichGO(gene = genes_to_test_no_dots, OrgDb = "org.Hs.eg.db", keyType = "ENSEMBL", ont = "BP")
+path_df_enrich <- as.data.frame(GO_results)
+
+
+```
+```{r}
+fit <- plot(barplot(GO_results, showCategory = 20))
+png("out.png", res = 250, width = 1400, height = 1800)
+print(fit)
+dev.off()
+
+```
+
+
+```{r}
+# GO_results <- enricher()
+# as.data.frame(GO_results)
+```
+
+
+```{r}
+# prepaer meta data for multi factor analysis 
+metadata_rnames_merged_with_info_orderd
+metadata_rnames_merged_with_info_orderd$G6PD_STATUS <- factor(metadata_rnames_merged_with_info_orderd$G6PD_STATUS)
+table(metadata_rnames_merged_with_info_orderd$cancer_type, metadata_rnames_merged_with_info_orderd$G6PD_STATUS)
+metadata_rnames_merged_with_info_orderd$cancer_type <- droplevels(metadata_rnames_merged_with_info_orderd$cancer_type)
+metadata_rnames_merged_with_info_orderd$G6PD_STATUS <- droplevels(metadata_rnames_merged_with_info_orderd$G6PD_STATUS)
+metadata_rnames_merged_with_info_orderd
+```
+
+
+
+```{r}
+# #multi factor analysis 
+# metadata_rnames_merged_with_info_orderd
+# library(DESeq2)
+# ddsMF <- DESeqDataSetFromMatrix(countData = matrix_for_deseq,
+#                               colData = metadata_rnames_merged_with_info_orderd,
+#                               design = ~ cancer_type + G6PD_STATUS + cancer_type:G6PD_STATUS)
+# ddsMF$G6PD_STATUS <- relevel(ddsMF$G6PD_STATUS, ref = "normal")
+# ddsMF <- DESeq(ddsMF)
+# #design(ddsMF) <- formula(~ cancer_type + G6PD_STATUS)
+# # levels(ddsMF$`Cancer Type`)
+# # levels(ddsMF$`Cancer Type`) <- sub("-.*", "", levels(ddsMF$`Cancer Type`))
+# # levels(ddsMF$`Cancer Type`)s
+
+
+```
+```{r}
+ddsMF_results <- results(ddsMF,contrast = c())
+summary(ddsMF_results)
+resultsNames(ddsMF_results)
+```
+```{r}
+names(as.data.frame(coef(ddsMF)))
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
