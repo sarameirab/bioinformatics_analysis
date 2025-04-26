@@ -1,0 +1,133 @@
+```{r}
+#loading data
+library(readr)
+GSE190928 <- read_tsv("/Users/efraimshine/Desktop/rna_seq/cell_lines/GSE190928_raw_counts_GRCh38.p13_NCBI.tsv")
+Human.GRCh38.p13.annot <- read_tsv("/Users/efraimshine/Desktop/rna_seq/cell_lines/Human.GRCh38.p13.annot (1).tsv")
+GSE190928
+Human.GRCh38.p13.annot
+GSE190928_annotation_merge <- merge(GSE190928,Human.GRCh38.p13.annot)
+GSE190928_annotation_merge
+
+
+```
+```{r}
+#prepare data for analysis
+GSE190928_counts_for_deseq <- GSE190928_annotation_merge %>% dplyr::select(Symbol,GSM5734411,GSM5734412,GSM5734413,GSM5734414,GSM5734415,GSM5734416) %>% distinct(Symbol, .keep_all = TRUE)
+rownames(GSE190928_counts_for_deseq) <- GSE190928_counts_for_deseq$Symbol
+GSE190928_counts_for_deseq$Symbol <- NULL
+GSE190928_counts_for_deseq
+
+
+#meta data for analysis
+GSE190928_metadata <- data.frame(g6pd_status = c("WT","WT","WT","KD","KD","KD"))
+rownames(GSE190928_metadata) <- colnames(GSE190928_counts_for_deseq)
+GSE190928_metadata$g6pd_status <- as.factor(GSE190928_metadata$g6pd_status)
+GSE190928_metadata
+```
+
+```{r}
+# run deseq2 for vikash experiments cell lines
+library("DESeq2")
+dds <- DESeqDataSetFromMatrix(countData = GSE190928_counts_for_deseq,
+                              colData = GSE190928_metadata,
+                              design = ~  g6pd_status)
+dds
+dds$g6pd_status <- relevel(dds$g6pd_status, ref = "WT")
+```
+```{r}
+dds <- DESeq(dds)
+res <- results(dds)
+res
+```
+
+```{r}
+summary(res)
+resultsNames(dds)
+plotMA(res, ylim=c(-2,2))
+
+```
+```{r}
+resLFC <- lfcShrink(dds, coef="g6pd_status_KD_vs_WT", type="apeglm")
+resLFC
+plotMA(resLFC, ylim=c(-2,2))
+```
+
+```{r}
+# clustering
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+```
+```{r}
+sigs_GO <- na.omit(res)
+sigs_GO
+sigs_GO <- sigs_GO[sigs_GO$padj < 0.05 & sigs_GO$baseMean > 50,]
+#sigs_GO <- sigs_GO[sigs_GO$padj < 0.05,]
+sigs_GO
+genes_to_test_GO <- rownames(sigs_GO[sigs_GO$log2FoldChange > 0.5,])
+#genes_to_test_GO <- sub(".*\\.([^\\.]+)\\.$", "\\1", genes_to_test_GO)
+length(genes_to_test_GO)
+#genes_to_test_GO
+
+GO_results <- enrichGO(gene = genes_to_test_GO, OrgDb = "org.Hs.eg.db", keyType = "SYMBOL", ont = "BP")
+path_df_enrich <- as.data.frame(GO_results)
+
+
+
+```
+
+
+```{r}
+path_df_enrich
+
+
+lipid_pathways <- c("lipid catabolic process","regulation of lipid catabolic process","cellular lipid catabolic process","regulation of fatty acid transport","lipid storage")
+
+lipid_pathways_enrich <- GO_results %>% filter(Description %in% lipid_pathways)
+
+
+fit_KD <- plot(barplot(GO_results, showCategory = 10))
+#png("out.png", res = 250, width = 1400, height = 1800)
+#print(fit_KD)
+#dev.off()
+```
+```{r}
+#gsea 
+res_for_gsea <- res[res$baseMean > 50,] 
+res_for_gsea <- res_for_gsea[order(-res_for_gsea$log2FoldChange),]
+res_for_gsea 
+
+genes_for_gsea <- res_for_gsea$log2FoldChange
+
+names(genes_for_gsea) <- rownames(res_for_gsea)
+
+#names(genes_for_gsea) <- sub(".*\\.([^\\.]+)\\.$", "\\1", rownames(res_for_gsea))
+#genes_for_gsea
+
+
+gsea_res <- gseGO(genes_for_gsea,
+             ont = "BP",
+             keyType = "SYMBOL",
+             OrgDb = "org.Hs.eg.db",
+             eps = 1e-300,pvalueCutoff = 1)
+```
+
+```{r}
+gsea_results_df <- gsea_res %>% as.data.frame()
+gsea_results_df
+```
+```{r}
+lipid_pathways <- c("lipid catabolic process","regulation of lipid catabolic process","cellular lipid catabolic process","regulation of fatty acid transport","lipid storage")
+pathway_name <- "lipid catabolic process"
+
+gsea_result_pathway_df <- gsea_results_df %>% filter(Description == pathway_name)
+gsea_result_pathway_df
+pathway_id <- gsea_result_pathway_df[1,1] 
+pathway_id
+fit_gsea <- gseaplot(gsea_res, geneSetID = pathway_id,title = pathway_name)
+fit_gsea
+png("/Users/efraimshine/Desktop/rna_seq/cell_lines/lipid catabolic process.png", res = 250, width = 1800, height = 1400)
+print(fit_gsea)
+dev.off()
+```
+
