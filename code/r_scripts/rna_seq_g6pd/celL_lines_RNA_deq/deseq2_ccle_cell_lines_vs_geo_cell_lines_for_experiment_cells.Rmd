@@ -1,0 +1,310 @@
+```{r}
+library(dplyr)
+# explore g6pd expression across celll lines
+cell_lines_g6pd_expression <- read.csv("/Users/efraimshine/Desktop/rna_seq/cell_lines/G6PD Expression Public 24Q4.csv")
+cell_lines_g6pd_expression_non_cancer <- cell_lines_g6pd_expression %>% filter(Lineage.Subtype == "Non-Cancerous")
+cell_lines_g6pd_expression_cancer_only <- cell_lines_g6pd_expression %>% filter(Lineage.Subtype != "Non-Cancerous")
+cell_lines_g6pd_expression
+cell_lines_g6pd_expression_non_cancer
+cell_lines_g6pd_expression_cancer_only
+hist(cell_lines_g6pd_expression$Expression.Public.24Q4)
+hist(cell_lines_g6pd_expression_non_cancer$Expression.Public.24Q4)
+hist(cell_lines_g6pd_expression_cancer_only$Expression.Public.24Q4)
+```
+
+```{r}
+# z score normalization
+cell_lines_g6pd_expression$z_score <- scale(cell_lines_g6pd_expression$Expression.Public.24Q4)
+cell_lines_g6pd_expression
+hist(cell_lines_g6pd_expression$z_score)
+```
+
+```{r}
+low_zscore <- cell_lines_g6pd_expression %>% filter(z_score < -1.67 & Lineage == "Lung")
+cell_lines_g6pd_expression %>% filter(Cell.Line.Name ==  "LCLC103H")
+cell_lines_g6pd_expression %>% filter(Cell.Line.Name ==  "SW48")
+lung <- cell_lines_g6pd_expression %>% filter(Lineage == "Lung")
+lung
+```
+```{r}
+hist(lung$Expression.Public.24Q4)
+hist(lung$z_score)
+lung %>% filter(z_score < -1.67)
+lung %>% filter(z_score > 1.67)
+lung$z_lung <- scale(lung$Expression.Public.24Q4)
+hist(lung$z_lung)
+lung %>% filter(z_lung < -1.67)
+```
+```{r}
+# annotations
+read_counts_depmap <- read.csv("/Users/efraimshine/Desktop/rna_seq/cell_lines/OmicsExpressionGenesExpectedCountProfile.csv")
+
+```
+```{r}
+print(read_counts_depmap)
+```
+
+
+```{r}
+GSE286573 <- read.table("/Users/efraimshine/Desktop/rna_seq/cell_lines/GSE286573_htseq_rawCounts.txt", header = TRUE, sep = "\t") # Use '\t' for tab-separated files
+print(GSE286573)
+
+```
+
+
+```{r}
+model_depmap <- read.csv("/Users/efraimshine/Desktop/rna_seq/cell_lines/Model.csv")
+omics_profile_depmap <- read.csv("/Users/efraimshine/Desktop/rna_seq/cell_lines/OmicsProfiles.csv")
+read_counts_depmap
+model_depmap
+omics_profile_depmap
+
+
+```
+```{r}
+# Load dplyr for data manipulation
+library(dplyr)
+
+# #Perform a left join to add ModelID from omics_profile_depmap to read_counts_depmap
+# read_counts_depmap_with_modelID <- read_counts_depmap %>%
+#   left_join(omics_profile_depmap, by = c("X" = "ProfileID")) %>%
+#   relocate(ModelID, .before = X)  # Move ModelID to the first column
+
+# View the updated dataframe
+
+
+```
+```{r}
+read_counts_depmap_with_modelID
+```
+
+```{r}
+read_counts_depmap[is.na(read_counts_depmap$ModelID), ]
+non_unique_values <- unique(read_counts_depmap$ModelID[duplicated(read_counts_depmap$ModelID)])
+non_unique_values
+
+library(dplyr)
+
+# Get rows with non-unique values in column 'ID'
+non_unique_rows <- read_counts_depmap_with_modelID %>%
+  group_by(ModelID) %>%
+  filter(n() > 1) %>%
+  ungroup() %>% arrange(ModelID)
+
+# Print result
+print(non_unique_rows)
+
+model_depmap %>% filter(ModelID %in% non_unique_rows$ModelID)
+omics_profile_depmap %>% filter(ModelID %in% non_unique_rows$ModelID & Datatype == "rna") %>% arrange(ModelID)
+omics_profile_depmap %>% filter(ModelID %in% read_counts_depmap_with_modelID$ModelID & Datatype == "rna" & Stranded == "True") %>% arrange(ModelID)
+```
+```{r}
+omics_profile_depmap %>% filter(Stranded == "False")
+```
+```{r}
+library(dplyr)
+#prepare rna data for analysis
+unique_read_counts_depmap_transposed <-  read_counts_depmap_with_modelID %>% distinct(ModelID, .keep_all = TRUE) %>% dplyr::select(-X) %>% t() %>% as.data.frame() 
+colnames(unique_read_counts_depmap_transposed) <- unique_read_counts_depmap_transposed[1, ]
+ 
+
+```
+```{r}
+unique_read_counts_depmap_transposed <- unique_read_counts_depmap_transposed[-1, ] 
+unique_read_counts_depmap_transposed
+
+```
+```{r}
+# treat gene names
+rownames(unique_read_counts_depmap_transposed) <- sub(".*\\.([^\\.]+)\\.$", "\\1", rownames(unique_read_counts_depmap_transposed))
+unique_read_counts_depmap_transposed
+```
+
+```{r}
+#intersction ckecking
+
+length(intersect(rownames(unique_read_counts_depmap_transposed),GSE286573$ENSEMBL_ID))
+```
+
+
+```{r}
+#make one df for ccle and geo data - we take control a549 from geo and lo g6pd from ccle
+library(dplyr)
+#c("A549", "AGS","NCIN87","PATU8988T","IGR1","LCLC103H"))
+#c("low", "normal","low","normal","normal","low"))
+# c("A549", "SKMES1","NCIH2170","PATU8988T","IGR1","LCLC103H"))
+# analysis for cell lines from experiment- prepare count df and metadata
+model_for_exoriment_cells <- model_depmap %>% filter(StrippedCellLineName %in% c("PATU8988T","IGR1","LCLC103H"))
+model_for_exoriment_cells
+
+
+#subsetung ccle cell lines
+read_counts_for_experiment_cells <- unique_read_counts_depmap_transposed %>% dplyr::select(all_of(model_for_exoriment_cells$ModelID))
+read_counts_for_experiment_cells
+#subseting geo cell lines
+
+GSE286573_A549 <- GSE286573 %>% dplyr::select(ENSEMBL_ID,A549_Vehicle_n1_S1,A549_Vehicle_n2_S2,A549_Vehicle_n3_S3)
+rownames(GSE286573_A549) <- GSE286573_A549$ENSEMBL_ID
+GSE286573_A549$ENSEMBL_ID <- NULL
+GSE286573_A549
+
+# Ensure row names are preserved before merging
+read_counts_for_experiment_cells$RowName <- rownames(read_counts_for_experiment_cells)
+GSE286573_A549$RowName <- rownames(GSE286573_A549)
+
+# Merge the data frames based on row names
+merged_ccle_GSE286573 <- merge(read_counts_for_experiment_cells, GSE286573_A549, by = "RowName")
+
+# Restore row names and remove the extra column
+rownames(merged_ccle_GSE286573) <- merged_ccle_GSE286573$RowName
+merged_ccle_GSE286573$RowName <- NULL
+
+merged_ccle_GSE286573_int <- merged_ccle_GSE286573 %>% mutate_all(as.integer) 
+merged_ccle_GSE286573_int
+
+# create metadata
+
+merged_ccle_GSE286573_metadata <- data.frame(g6pd_status = c("low", "low","low","normal", "normal", "normal"), batch = c("ccle","ccle","ccle","geo","geo","geo"))
+rownames(merged_ccle_GSE286573_metadata) <- colnames(merged_ccle_GSE286573_int)
+merged_ccle_GSE286573_metadata$g6pd_status <- as.factor(merged_ccle_GSE286573_metadata$g6pd_status)
+merged_ccle_GSE286573_metadata$batch <- as.factor(merged_ccle_GSE286573_metadata$batch)
+merged_ccle_GSE286573_metadata
+
+
+
+# experimental_cells_metadata <- data.frame(g6pd_status = c("low", "low","normal","low"))
+# rownames(experimental_cells_metadata) <- colnames(read_counts_for_exoriment_cells)
+# experimental_cells_metadata$g6pd_status <- as.factor(experimental_cells_metadata$g6pd_status)
+# 
+# read_counts_for_exoriment_cells_int <- read_counts_for_exoriment_cells %>% mutate_all(as.integer) 
+# read_counts_for_exoriment_cells_int
+# read_counts_for_exoriment_cells_int <- read_counts_for_exoriment_cells_int %>%na.omit()
+# read_counts_for_exoriment_cells_int
+# experimental_cells_metadata
+# summary(read_counts_for_exoriment_cells)
+# 
+# read_counts_for_exoriment_cells_int %>% filter(is.na(`ACH-000023`))
+# read_counts_for_exoriment_cells %>% filter(row.names(read_counts_for_exoriment_cells) == "SharedToDbgap")
+# summary(read_counts_for_exoriment_cells_int)
+
+
+```
+
+# this is a comparison between cell lines from ccle and a geo data set GSE286573 - compare cell lines which were treated in the lab to cell lines that 
+
+```{r}
+# run deseq2 for vikash experiments cell lines
+library("DESeq2")
+dds <- DESeqDataSetFromMatrix(countData = merged_ccle_GSE286573_int,
+                              colData = merged_ccle_GSE286573_metadata,
+                              design = ~  g6pd_status)
+dds
+dds$g6pd_status <- relevel(dds$g6pd_status, ref = "normal")
+
+```
+
+```{r}
+dds <- DESeq(dds)
+res <- results(dds)
+res
+```
+```{r}
+summary(res)
+resultsNames(dds)
+
+
+```
+```{r}
+plotMA(res, ylim=c(-2,2))
+resLFC <- lfcShrink(dds, coef="g6pd_status_low_vs_normal", type="apeglm")
+resLFC
+plotMA(resLFC, ylim=c(-2,2))
+```
+
+
+```{r}
+# clustering
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+```
+```{r}
+sigs_GO <- na.omit(res)
+sigs_GO
+sigs_GO <- sigs_GO[sigs_GO$padj < 0.05 & sigs_GO$baseMean > 50,]
+#sigs_GO <- sigs_GO[sigs_GO$padj < 0.05,]
+sigs_GO
+genes_to_test_GO <- rownames(sigs_GO[sigs_GO$log2FoldChange > 0.5,])
+genes_to_test_GO <- sub(".*\\.([^\\.]+)\\.$", "\\1", genes_to_test_GO)
+length(genes_to_test_GO)
+#genes_to_test_GO
+
+GO_results <- enrichGO(gene = genes_to_test_GO, OrgDb = "org.Hs.eg.db", keyType = "ENSEMBL", ont = "BP")
+path_df_enrich <- as.data.frame(GO_results)
+
+
+
+```
+```{r}
+path_df_enrich
+```
+
+```{r}
+
+
+dgenes_to_test_GO_df <- data.frame(Gene_ID = genes_to_test_GO)
+length(dgenes_to_test_GO_df)
+# Write to CSV
+write.csv(dgenes_to_test_GO_df, "/Users/efraimshine/Desktop/rna_seq/cell_lines/gene_ids.csv", row.names = FALSE)
+
+
+```
+
+```{r}
+matching_rows <- grep("160211", rownames(read_counts_for_exoriment_cells_int))
+matching_rows
+matching_data <- read_counts_for_exoriment_cells_int[matching_rows, , drop = FALSE]
+matching_data
+#plotCounts(dds, gene=which.min(res$padj), intgroup="g6pd_status")
+plotCounts(dds, gene="G6PD..ENSG00000160211.", intgroup="g6pd_status")
+```
+
+```{r}
+library(ggplot2)
+
+# Extract count data for the specific gene
+gene_counts <- plotCounts(dds, gene="G6PD..ENSG00000160211.", intgroup="g6pd_status", returnData=TRUE)
+gene_counts
+
+# Add sample names to the plot
+ggplot(gene_counts, aes(x=g6pd_status, y=count, label=rownames(gene_counts))) +
+  geom_point(position=position_jitter(width=0.1), size=3, color="blue") +  # Scatter plot with jitter
+  geom_text(vjust=-0.5, size=3) +  # Add sample names above points
+  theme_minimal() +
+  labs(title="Gene Expression of G6PD", y="Normalized Counts", x="G6PD Status")
+```
+```{r}
+res_for_gsea <- res[res$baseMean > 50,] 
+res_for_gsea <- res_for_gsea[order(-res_for_gsea$log2FoldChange),]
+res_for_gsea 
+
+genes_for_gsea <- res_for_gsea$log2FoldChange
+names(genes_for_gsea) <- sub(".*\\.([^\\.]+)\\.$", "\\1", rownames(res_for_gsea))
+#genes_for_gsea
+
+
+gsea_res_big_ctr <- gseGO(genes_for_gsea,
+             ont = "BP",
+             keyType = "ENSEMBL",
+             OrgDb = "org.Hs.eg.db",
+             eps = 1e-300,
+             pvalueCutoff = 1)
+
+```
+```{r}
+gsea_results_df <- as.data.frame(gsea_res_big_ctr)
+gsea_results_df %>% filter(ID== "GO:0006635")
+fit_gsea <- gseaplot(gsea_res_big_ctr, geneSetID = "GO:0006635",title = "fatty acid beta-oxidation")
+fit_gsea
+```
+

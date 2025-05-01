@@ -46,7 +46,7 @@ create_back_transformed_df <- function(sample_file, gene_expression_data) {
 
 
   # Filter the gene expression data
-  filtered_df <- gene_expression_data %>% select("sample", all_of(filtered_vector))
+  filtered_df <- gene_expression_data %>% dplyr::select("sample", all_of(filtered_vector))
   rownames(filtered_df) <- filtered_df$sample
   
   # Backtransform the numeric columns
@@ -223,6 +223,64 @@ summary(res05)
 ```{r}
 plotMA(res, ylim=c(-2,2))
 ```
+```{r}
+# getting the transformed counts for pca
+vsd <- vst(dds)
+vsd
+plotPCA(vsd, intgroup = "G6PD_STATUS")
+
+```
+```{r}
+#explore pca results
+pcaData <- plotPCA(vsd, intgroup = "G6PD_STATUS", returnData = TRUE)
+pcaData 
+cluster <- pcaData %>% filter(PC1 < -25)
+cluster
+```
+```{r}
+#convert ids to gene symbol 
+library(org.Hs.eg.db)
+ensembl_ids <- rownames(res)
+
+ensembl_ids_clean <- sub("\\..*", "", ensembl_ids)
+symbols <- mapIds(org.Hs.eg.db,
+                  keys = ensembl_ids_clean,
+                  keytype = "ENSEMBL",
+                  column = "SYMBOL",
+                  multiVals = "first")
+head(symbols)
+```
+
+```{r}
+# get expression plot for g6pd 
+gene_of_interest <- "ENSG00000269087" #"ENSG00000160211"
+# get gtpd id in the data set 
+res_gene_ensble <- rownames(res)
+matches <- grep(gene_of_interest, res_gene_ensble, value = TRUE)
+print(matches)
+# Get normalized counts
+norm_counts <- counts(dds, normalized=TRUE)
+# Select your gene
+
+
+# Create a data frame
+plot_df <- data.frame(
+  expression = norm_counts[gene_of_interest, ],
+  condition = colData(dds)$condition  # Replace 'condition' with your real grouping variable
+)
+
+library(ggplot2)
+
+ggplot(plot_df, aes(x=condition, y=expression)) +
+  geom_boxplot() +
+  geom_jitter(width=0.2, color="blue", size=2) +
+  theme_minimal() +
+  labs(title=paste("Expression of", gene_of_interest),
+       x="Condition",
+       y="Normalized Expression")
+```
+
+
 ```{r}
 resSig <- subset(resOrdered, padj < 0.05)
 resSig

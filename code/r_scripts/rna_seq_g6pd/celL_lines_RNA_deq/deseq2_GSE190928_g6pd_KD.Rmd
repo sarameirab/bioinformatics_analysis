@@ -7,8 +7,6 @@ GSE190928
 Human.GRCh38.p13.annot
 GSE190928_annotation_merge <- merge(GSE190928,Human.GRCh38.p13.annot)
 GSE190928_annotation_merge
-
-
 ```
 ```{r}
 #prepare data for analysis
@@ -118,7 +116,7 @@ gsea_results_df
 ```
 ```{r}
 lipid_pathways <- c("lipid catabolic process","regulation of lipid catabolic process","cellular lipid catabolic process","regulation of fatty acid transport","lipid storage")
-pathway_name <- "lipid catabolic process"
+pathway_name <- "glucose metabolic process"
 
 gsea_result_pathway_df <- gsea_results_df %>% filter(Description == pathway_name)
 gsea_result_pathway_df
@@ -126,8 +124,10 @@ pathway_id <- gsea_result_pathway_df[1,1]
 pathway_id
 fit_gsea <- gseaplot(gsea_res, geneSetID = pathway_id,title = pathway_name)
 fit_gsea
-png("/Users/efraimshine/Desktop/rna_seq/cell_lines/lipid catabolic process.png", res = 250, width = 1800, height = 1400)
-print(fit_gsea)
-dev.off()
+# png("/Users/efraimshine/Desktop/rna_seq/cell_lines/lipid catabolic process.png", res = 250, width = 1800, height = 1400)
+# print(fit_gsea)
+# dev.off()
+
+
 ```
 
