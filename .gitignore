@@ -10,4 +10,7 @@
 **/*.pyc
 **/*.DS_Store
 **/*.keras
+**/*.html
+**/*.RDataTmp
+
 
