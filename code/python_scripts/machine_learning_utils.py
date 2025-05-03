@@ -18,7 +18,6 @@ def create_plots_for_model(y_test, y_train, predictions, predictions_on_training
     
     # Convert predictions to lists
     true_values_list = y_test.tolist()
-    true_values_list = y_test.tolist()
     true_values_on_training_list = y_train.tolist()
     all_sensitivities = y.tolist()
 
@@ -28,24 +27,24 @@ def create_plots_for_model(y_test, y_train, predictions, predictions_on_training
     plt.show()
 
 
-    plt.hist(true_values_list, bins=5, color='skyblue', edgecolor='black')
-    plt.title("True values distribution")
+    plt.hist(true_values_list, bins=15, color='skyblue', edgecolor='black')
+    plt.title("True values on validation set distribution")
     plt.show()
 
-    plt.hist(predictions, bins=5, color='skyblue', edgecolor='black')
+    plt.hist(predictions, bins=15, color='skyblue', edgecolor='black')
     plt.title("Prediction distribution")
     plt.show()
 
-    plt.hist(true_values_on_training_list, bins=5, color='skyblue', edgecolor='black')
+    plt.hist(true_values_on_training_list, bins=15, color='skyblue', edgecolor='black')
     plt.title("True values on training distribution")
     plt.show()
 
 
-    plt.hist(predictions_on_training, bins=5, color='skyblue', edgecolor='black')
+    plt.hist(predictions_on_training, bins=15, color='skyblue', edgecolor='black')
     plt.title("Prediction on training distribution")
     plt.show()
 
 
-    plt.hist(all_sensitivities, bins=5, color='skyblue', edgecolor='black')
+    plt.hist(all_sensitivities, bins=15, color='skyblue', edgecolor='black')
     plt.title("True All sensitivities distribution")
     plt.show()
