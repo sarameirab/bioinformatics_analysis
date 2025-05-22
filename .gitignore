@@ -12,5 +12,6 @@
 **/*.keras
 **/*.html
 **/*.RDataTmp
+venv
 
 

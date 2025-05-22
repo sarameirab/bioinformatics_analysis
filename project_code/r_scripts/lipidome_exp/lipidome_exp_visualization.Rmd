@@ -1,0 +1,122 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(readxl)
+# Read the Excel file
+exp_lipidome <- read_excel("/Users/efraimshine/Desktop/lipidome_exp/Vikash-S.Izraeli-Y.Tabach-Lipids-Apr2025.xlsx")
+
+# View the first few rows
+exp_lipidome
+
+
+```
+```{r}
+lipidome_for_heatmap <- exp_lipidome[,8:16]
+lipidome_for_heatmap
+# Assuming 'lipidome_data' is your data frame
+
+# Loop over each column and plot a histogram
+par(mfrow = c(ceiling(sqrt(ncol(lipidome_for_heatmap))), ceiling(sqrt(ncol(lipidome_for_heatmap)))))  # Adjust number of rows and columns for the layout
+
+for (i in 1:ncol(lipidome_for_heatmap)) {
+  hist(lipidome_for_heatmap[[i]], main = colnames(lipidome_for_heatmap)[i], xlab = colnames(lipidome_for_heatmap)[i], col = 'lightblue', border = 'black')
+}
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+```{r}
+par(mfrow = c(ceiling(sqrt(ncol(lipidome_for_heatmap))), ceiling(sqrt(ncol(lipidome_for_heatmap)))))  # Adjust number of rows and columns for the layout
+
+for (i in 1:ncol(lipidome_for_heatmap)) {
+  # Apply log1p transformation to avoid issues with zero values
+  hist(log2(lipidome_for_heatmap[[i]]),
+       main = colnames(lipidome_for_heatmap)[i],
+       xlab = colnames(lipidome_for_heatmap)[i],
+       col = 'lightblue',
+       border = 'black',
+       breaks = 30)  # You can adjust the number of breaks for more detailed bins
+}
+```
+```{r}
+library(dplyr)
+log_transformed_data <- log1p(lipidome_for_heatmap)
+z_score_data <- t(scale(t(log_transformed_data))) %>% as.data.frame()
+log_transformed_data
+z_score_data
+```
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+```{r}
+lipidome_for_heatmap[1,]
+log1p(lipidome_for_heatmap[1,])
+scale(t(log1p(lipidome_for_heatmap[1,])))
+
+scaled_with_annotations_df <- cbind(exp_lipidome[,1:7],z_score_data)
+scaled_with_annotations_df
+```
+```{r}
+library(ComplexHeatmap)
+library(circlize)
+library(dplyr)
+
+# Your dataframe
+df <- scaled_with_annotations_df
+
+# 1. Separate annotations and heatmap values
+annotation_cols <- df[, 1:7]
+heatmap_matrix <- as.matrix(df[, 8:16])  # Make sure columns 8:16 are numeric
+
+# 2. Define column groupings for top annotation (replicates)
+# Assuming 3 columns each for 3 replicate groups
+column_groups <- c(rep("Replicate_1", 3), rep("Replicate_2", 3), rep("Replicate_3", 3))
+
+# 3. Create top annotation with color legend for column groups
+top_anno <- HeatmapAnnotation(
+  Replicates = column_groups,
+  col = list(
+    Replicates = c(
+      "Replicate_1" = "tomato",
+      "Replicate_2" = "skyblue",
+      "Replicate_3" = "springgreen"
+    )
+  ),
+  annotation_name_side = "left"
+)
+
+# 4. Row annotation using column 2 of the original df
+row_labels <- annotation_cols[[2]]
+
+row_anno <- rowAnnotation(
+  Label = row_labels,
+  annotation_name_side = "top",
+  annotation_width = unit(4, "cm")
+)
+
+# 5. Draw the heatmap
+Heatmap(
+  heatmap_matrix,
+  name = "Z-Score",
+  top_annotation = top_anno,
+  left_annotation = row_anno,
+  row_names_side = "left",
+  column_names_side = "top",
+  show_row_names = FALSE,         # We show labels through row annotation instead
+  cluster_rows = TRUE,
+  cluster_columns = TRUE
+)
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.

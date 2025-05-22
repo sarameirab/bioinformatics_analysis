@@ -1,0 +1,31 @@
+```{r}
+p53_mutations <- read.csv("C:\\Users\\sarameirab\\Desktop\\ai_agent_lab_data\\depmap\\p53_files\\TP53_mutations.csv")
+p53_mutations
+```
+```{r}
+# Load the dplyr package
+library(dplyr)
+
+# Example data frame
+
+# Count occurrences of each unique value in "Protein.Change"
+count_df <- p53_mutations %>%
+  group_by(Protein.Change) %>%
+  summarise(Count = n(), .groups = "drop")
+
+# View the resulting data frame
+count_df
+```
+```{r}
+filtered_df <- count_df %>%
+  filter(Protein.Change %in% c("p.P278H", "p.C176F"))
+filtered_df
+
+```
+
+```{r}
+filtered_df <- p53_mutations %>%
+  filter(Protein.Change %in% c("p.P278H", "p.C176F"))
+filtered_df
+```
+

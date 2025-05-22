@@ -1,0 +1,69 @@
+```{r}
+ttest_hmozygous_prism <- read.csv("C:\\Users\\sarameirab\\Desktop\\ai_agent_lab_data\\depmap\\ttest_homozygous_prism.csv")
+ttest_hmozygous_VS_norm_and_heterozygous_prism <- read.csv("C:\\Users\\sarameirab\\Desktop\\ai_agent_lab_data\\depmap\\ttest_homozygous_vs_heterozygous_and_normalprism.csv")
+```
+
+```{r}
+ttest_hmozygous_prism
+ttest_hmozygous_VS_norm_and_heterozygous_prism
+```
+```{r}
+library(dplyr)
+pten_ARV_825_homo_vs_norm <- ttest_hmozygous_prism %>% filter(Gene == "PTEN (5728)")
+pten_ARV_825_homo_vs_norm_and_hetero <- ttest_hmozygous_VS_norm_and_heterozygous_prism %>% filter(mutation == "PTEN (5728)")
+pten_ARV_825_homo_vs_norm
+pten_ARV_825_homo_vs_norm_and_hetero
+```
+
+```{r}
+lof_file <- read.csv("C:\\Users\\sarameirab\\Desktop\\ai_agent_lab_data\\depmap\\OmicsSomaticMutationsMatrixDamaging.csv")
+prism_24q2 <- read.csv("C:\\Users\\sarameirab\\Desktop\\ai_agent_lab_data\\depmap\\PRISM_Repurposing_Public_24Q2_subsetted.csv")
+lof_file
+prism_24q2
+```
+
+```{r}
+# validation of results - creation df for lof data and sensitivity data
+# lof data df's
+pten_lof_homozygous <- lof_file %>% filter(PTEN..5728. == 2) %>% select(X,PTEN..5728.)
+pten_lof_normal_and_heterozygous <- lof_file %>% filter(PTEN..5728. < 2) %>% select(X,PTEN..5728.)
+pten_lof_normal <- lof_file %>% filter(PTEN..5728. == 0) %>% select(X,PTEN..5728.)
+pten_lof_homozygous 
+pten_lof_normal_and_heterozygous
+pten_lof_normal
+```
+```{r}
+# sensitivity df's - ARV-825 (BRD:BRD-A00047421-001-01-7)
+PTEN_ARV_sensitivity_homozygous <- merge(pten_lof_homozygous, prism_24q2) %>% select(X ,ARV.825..BRD.BRD.A00047421.001.01.7.) %>% na.omit()
+PTEN_ARV_sensitivity_normal <- merge(pten_lof_normal, prism_24q2) %>% select(X ,ARV.825..BRD.BRD.A00047421.001.01.7.) %>% na.omit()
+PTEN_ARV_sensitivity_homozygous$ARV.825..BRD.BRD.A00047421.001.01.7.
+PTEN_ARV_sensitivity_normal$ARV.825..BRD.BRD.A00047421.001.01.7.
+```
+```{r}
+#validation for pten and ARV 825
+# Perform t-test
+t_test_result <- t.test(
+  PTEN_ARV_sensitivity_homozygous$ARV.825..BRD.BRD.A00047421.001.01.7.,
+  PTEN_ARV_sensitivity_normal$ARV.825..BRD.BRD.A00047421.001.01.7.
+,var.equal = TRUE)
+
+# Calculate means
+mean_homozygous <- mean(PTEN_ARV_sensitivity_homozygous$ARV.825..BRD.BRD.A00047421.001.01.7., na.rm = TRUE)
+mean_normal <- mean(PTEN_ARV_sensitivity_normal$ARV.825..BRD.BRD.A00047421.001.01.7., na.rm = TRUE)
+
+# Calculate standard deviations
+sd_homozygous <- sd(PTEN_ARV_sensitivity_homozygous$ARV.825..BRD.BRD.A00047421.001.01.7., na.rm = TRUE)
+sd_normal <- sd(PTEN_ARV_sensitivity_normal$ARV.825..BRD.BRD.A00047421.001.01.7., na.rm = TRUE)
+
+# Print results
+cat("T-test Results:\n")
+print(t_test_result)
+
+cat("\nGroup Statistics:\n")
+cat("Homozygous - Mean:", mean_homozygous, "SD:", sd_homozygous, "\n")
+cat("Normal - Mean:", mean_normal, "SD:", sd_normal, "\n")
+
+
+
+```
+

@@ -1,0 +1,107 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Define the function
+generate_boxplot <- function(gene_name, drug_name, data_path) {
+  # Define file paths
+  lof_file <- file.path(data_path, "Depmap/OmicsSomaticMutationsMatrixDamaging.csv")
+  drug_file <- file.path(data_path, "Depmap/PRISM_Repurposing_Public_24Q2_subsetted.csv")
+
+  # Load data
+  lof_data <- read.csv(lof_file, row.names = 1, check.names = FALSE)
+  drug_data <- read.csv(drug_file, row.names = 1, check.names = FALSE)
+  
+  # Ensure the gene and drug exist in the data
+  if (!(gene_name %in% colnames(lof_data))) {
+    stop("Gene not found in LOF data.")
+  }
+  if (!(drug_name %in% colnames(drug_data))) {
+    stop("Drug not found in drug sensitivity data.")
+  }
+
+  # Merge data based on cell line IDs
+  common_cell_lines <- intersect(rownames(lof_data), rownames(drug_data))
+  merged_data <- data.frame(
+    LOF = lof_data[common_cell_lines, gene_name],
+    Sensitivity = drug_data[common_cell_lines, drug_name]
+  )
+  
+    # Filter out rows with NA in Sensitivity
+  merged_data <- merged_data %>%
+    filter(!is.na(Sensitivity))
+
+
+  # Classify cell lines based on LOF status
+  merged_data <- merged_data %>%
+    mutate(LOF_Status = ifelse(is.na(LOF), NA, ifelse(LOF > 0, "LOF", "No LOF")))
+
+  # Compute statistics
+  stats <- merged_data %>%
+    group_by(LOF_Status) %>%
+    summarise(
+      Count = n(),
+      Mean = mean(Sensitivity, na.rm = TRUE),
+      SD = sd(Sensitivity, na.rm = TRUE)
+    )
+
+  # Perform t-test
+  t_test <- t.test(Sensitivity ~ LOF_Status, data = merged_data, na.action = na.omit)
+  p_value <- t_test$p.value
+
+  # Create the plot
+  plot <- ggplot(merged_data, aes(x = LOF_Status, y = Sensitivity, color = LOF_Status)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.5) +
+    geom_jitter(width = 0.2) +
+    theme_minimal() +
+    labs(
+      title = paste("Sensitivity to", drug_name, "by LOF Status of", gene_name),
+      subtitle = paste(
+        "LOF Cell Lines:", stats$Count[stats$LOF_Status == "LOF"],
+        "| No LOF Cell Lines:", stats$Count[stats$LOF_Status == "No LOF"],
+        "| p-value:", signif(p_value, 3)
+      ),
+      x = "LOF Status",
+      y = "Drug Sensitivity"
+    )
+
+  # Print the statistics
+  print(stats)
+  print(paste("p-value:", signif(p_value, 3)))
+
+  # Display the plot
+  lof_data
+  drug_data
+  merged_data
+  print(plot)
+}
+
+# Example usage
+data_path <- "~/workspace/ai_agent_lab_data"
+gene_name <- "ABCA1 (19)"  # Replace with desired gene name
+drug_name <- "VISOMITIN (BRD:BRD-K00003375-004-01-9)" # Replace with desired drug name
+generate_boxplot(gene_name, drug_name, data_path)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+
+
+
+
+
+
