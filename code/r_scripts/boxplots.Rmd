@@ -1,0 +1,783 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+prism_all_ttest_results <- read.csv("/Users/efraimshine/Desktop/all_genes_all_drugs_prism/all_genes_all_drugs_ttest_all results.csv")
+
+prism_all_ttest_results$effect_size <- prism_all_ttest_results$no_lof_mean - prism_all_ttest_results$lof_mean
+prism_all_ttest_results$minus_log <- -log10(prism_all_ttest_results$p_value)
+prism_all_ttest_results$effect_size_abs <- abs(prism_all_ttest_results$p_value)
+prism_all_ttest_results$gene_names <- gsub(" \\(.*\\)", "", prism_all_ttest_results$mutation)
+prism_all_ttest_results
+```
+```{r}
+library(dplyr)
+
+
+
+p53_table <- filter(prism_all_ttest_results, prism_all_ttest_results$mutation == "PTEN (5728)")
+p53_table$effect_abs <- abs(p53_table$effect_size)
+sorted_p53_table <- p53_table[order(-p53_table$effect_abs), ]
+sorted_p53_table$minuslog_10 <- -log10(sorted_p53_table$p_value)
+# Add significance thresholdgene_data
+#sorted_p53_table$significant <- ifelse(sorted_p53_table$minuslog_10 >1.3  & abs(sorted_p53_table$effect_size) > 0.5, "Significant", "Not Significant")
+sorted_p53_table$significant <- ifelse(sorted_p53_table$minuslog_10 >1.3  , "Significant", "Not Significant") 
+
+
+
+sorted_p53_table
+
+
+```
++
+
+```{r}
+library(ggplot2)
+p53_small_plot_data <- sorted_p53_table[-(1:6), ]
+ggplot(p53_small_plot_data, aes(x = effect_size, y = minuslog_10, color = significant)) +
+  geom_point(alpha = 0.7, size = 2) +
+  scale_color_manual(values = c("Significant" = "red", "Not Significant" = "gray")) +
+  labs(
+    title = "P53 Loss of function and drug sensitivity",
+    x = "effect size",
+    y = "-Log10 P-value"
+  ) +
+  theme_minimal() +
+  theme(legend.title = element_blank()) +
+  geom_hline(yintercept = -log10(0.05), linetype="dashed", color = "black") + 
+  annotate("text", x = min(p53_small_plot_data$effect_size), y = -log10(0.05) + 0.5, 
+           label = "p value = 0.05", hjust = -4) + geom_segment(aes(x = 0, xend = 0.5, y = -0.5, yend = -0.5), arrow = arrow(),show.legend = FALSE) +
+  geom_segment(aes(x = 0, xend = -0.5, y = -0.5, yend = -0.5), arrow = arrow(), show.legend = FALSE) +
+  annotate("text", x = 0.5, y = -0.7, label = "Sensitivity", hjust = -0.1) +
+  annotate("text", x = -0.5, y = -0.7, label = "Resistance", hjust = 1.1)
+  
+  #theme(legend.title = element_blank())
+
+```
+
+
+
+```{r}
+lof_file <- read.csv("~/workspace/ai_agent_lab_data/Depmap/OmicsSomaticMutationsMatrixDamaging.csv")
+drug_file <- read.csv("~/workspace/ai_agent_lab_data/Depmap/PRISM_Repurposing_Public_24Q2_subsetted.csv")
+lof_file
+drug_file
+```
+
+```{r}
+#homozygous resluts
+homozygous_results <- read.csv("~/workspace/ai_agent_lab_data/Depmap/ttest_homozygous_prism_clean_names.csv")
+homozygous_results
+```
+
+```{r}
+#search information in prism homo
+search_drugName <- homozygous_results[grepl("TEMSIROLIMUS", homozygous_results$Drug), ]
+search_geneName <- homozygous_results[grepl("PTEN", homozygous_results$Gene), ]
+search_drugName  %>% filter(Gene == "PTEN (5728)")
+search_geneName 
+```
+
+
+
+
+```{r}
+# search information in prism hetero
+search_drugName <- prism_all_ttest_results[grepl("BICALUTAMIDE", prism_all_ttest_results$drug), ]
+search_geneName <- prism_all_ttest_results[grepl("PARD3", prism_all_ttest_results$mutation), ]
+search_drugName  #%>% filter(mutation == "PARD3B (117583)")
+search_geneName 
+
+```
+
+
+
+
+
+
+
+
+```{r}
+# hetero data plot
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Define the function
+generate_boxplot <- function(gene_name, drug_name, data_path) {
+  # Define file paths
+  lof_file <- file.path(data_path, "Depmap/OmicsSomaticMutationsMatrixDamaging.csv")
+  drug_file <- file.path(data_path, "Depmap/PRISM_Repurposing_Public_24Q2_subsetted.csv")
+
+  # Load data
+  lof_data <- read.csv(lof_file, row.names = 1, check.names = FALSE)
+  drug_data <- read.csv(drug_file, row.names = 1, check.names = FALSE)
+ 
+  # Ensure the gene and drug exist in the data
+  if (!(gene_name %in% colnames(lof_data))) {
+    stop("Gene not found in LOF data.")
+  }
+  if (!(drug_name %in% colnames(drug_data))) {
+    stop("Drug not found in drug sensitivity data.")
+  }
+
+  # Merge data based on cell line IDs
+  common_cell_lines <- intersect(rownames(lof_data), rownames(drug_data))
+  merged_data <- data.frame(
+    LOF = lof_data[common_cell_lines, gene_name],
+    Sensitivity = drug_data[common_cell_lines, drug_name]
+  )
+ 
+    # Filter out rows with NA in Sensitivity
+  merged_data <- merged_data %>%
+    filter(!is.na(Sensitivity))
+
+
+  # Classify cell lines based on LOF status
+  
+  merged_data <- merged_data %>%
+    mutate(LOF_Status = ifelse(is.na(LOF), NA, ifelse(LOF > 0, "LOF", "No LOF")))
+
+  # Compute statistics
+  stats <- merged_data %>%
+    group_by(LOF_Status) %>%
+    summarise(
+      Count = n(),
+      Mean = mean(Sensitivity, na.rm = TRUE),
+      SD = sd(Sensitivity, na.rm = TRUE)
+    )
+
+  # Perform t-test
+  t_test <- t.test(Sensitivity ~ LOF_Status, data = merged_data, na.action = na.omit)
+  p_value <- t_test$p.value
+
+  # Create the plot
+  plot <- ggplot(merged_data, aes(x = LOF_Status, y = Sensitivity, color = LOF_Status)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.5) +
+    geom_jitter(width = 0.2) +
+    theme_minimal() +
+    labs(
+      title = paste("Sensitivity to", gsub(" .*", "", drug_name), "by LOF Status of", gene_name),
+      subtitle = paste(
+        "LOF Cell Lines:", stats$Count[stats$LOF_Status == "LOF"],
+        "| No LOF Cell Lines:", stats$Count[stats$LOF_Status == "No LOF"],
+        "| p-value:", signif(p_value, 3)
+      ),
+      x = "LOF Status",
+      y = "Drug Sensitivity"
+    )
+
+  # Print the statistics
+  print(stats)
+  print(paste("p-value:", signif(p_value, 3)))
+
+  # Display the plot
+  lof_data
+  drug_data
+  merged_data
+  print(plot)
+}
+
+# Example usage
+data_path <- "/Users/efraimshine/workspace/ai_agent_lab_data/"
+gene_name <- "PARD3B (117583)"  # Replace with desired gene name
+drug_name <- "BICALUTAMIDE (BRD:BRD-A29485665-001-12-8)"# Replace with desired drug name
+generate_boxplot(gene_name, drug_name, data_path)
+
+#RG7112 (BRD:BRD-A78210457-001-01-5)
+#AMG-232 (BRD:BRD-K64925568-001-01-8)
+#CGM097 (BRD:BRD-K79584249-001-01-3)
+#SAR405838 (BRD:BRD-A16035238-001-01-7)
+#IDASANUTLIN (BRD:BRD-K62627508-001-01-5)
+#MILADEMETAN (BRD:BRD-K00003406-001-01-9)
+#GDC-0575 (BRD:BRD-K00003112-001-01-9)
+#10-DEACETYLBACCATIN (BRD:BRD-K96631475-001-02-4)
+#PITAVASTATIN (BRD:BRD-K75958547-238-04-9)
+#AVITINIB (BRD:BRD-K00003294-050-01-9)
+
+
+# genes for screen 
+#EMETINE (BRD:BRD-A25687296-300-04-3)
+#
+
+```
+
+
+```{r}
+#homo data plot
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Define the function
+generate_boxplot <- function(gene_name, drug_name, data_path) {
+  # Define file paths
+  lof_file <- file.path(data_path, "Depmap/OmicsSomaticMutationsMatrixDamaging.csv")
+  drug_file <- file.path(data_path, "Depmap/PRISM_Repurposing_Public_24Q2_subsetted.csv")
+
+  # Load data
+  lof_data <- read.csv(lof_file, row.names = 1, check.names = FALSE)
+  drug_data <- read.csv(drug_file, row.names = 1, check.names = FALSE)
+
+  # Ensure the gene and drug exist in the data
+  if (!(gene_name %in% colnames(lof_data))) {
+    stop("Gene not found in LOF data.")
+  }
+  if (!(drug_name %in% colnames(drug_data))) {
+    stop("Drug not found in drug sensitivity data.")
+  }
+
+  # Merge data based on common cell line IDs
+  common_cell_lines <- intersect(rownames(lof_data), rownames(drug_data))
+  merged_data <- data.frame(
+    LOF = lof_data[common_cell_lines, gene_name],
+    Sensitivity = drug_data[common_cell_lines, drug_name]
+  )
+  
+    # merged_data <- merged_data %>%
+    # mutate(LOF_Status = ifelse(is.na(LOF), NA, ifelse(LOF > 0, "LOF", "No LOF")))
+
+
+  # Filter to include only LOF == 0 or 2
+  merged_data <- merged_data %>%
+    mutate(LOF_Status = case_when(
+      LOF == 0 ~ "No LOF",
+      LOF == 2 ~ "LOF",
+      TRUE ~ NA_character_
+    )) %>%
+    filter(!is.na(Sensitivity) )#& !is.na(LOF_Status))
+
+  # Compute statistics
+  stats <- merged_data %>%
+    group_by(LOF_Status) %>%
+    summarise(
+      Count = n(),
+      Mean = mean(Sensitivity, na.rm = TRUE),
+      SD = sd(Sensitivity, na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  # Perform t-test if both groups have at least 2 samples
+  #if (all(c("LOF", "No LOF") %in% stats$LOF_Status) &&
+   #   all(stats$Count[stats$LOF_Status %in% c("LOF", "No LOF")] >= 2)) {
+    t_test <- t.test(Sensitivity ~ LOF_Status, data = merged_data, na.action = na.omit)
+    p_value <- signif(t_test$p.value, 3)
+  #} else {
+   # p_value <- NA
+  #  warning("Not enough samples in both groups to perform t-test.")
+  #}
+
+  # Create the plot
+  plot <- ggplot(merged_data, aes(x = LOF_Status, y = Sensitivity, color = LOF_Status)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.5) +
+    geom_jitter(width = 0.2) +
+    theme_minimal() +
+    labs(
+      title = paste("Sensitivity to", gsub(" .*", "", drug_name), "by LOF Status of", gene_name),
+      subtitle = paste(
+        "LOF Cell Lines:", stats$Count[stats$LOF_Status == "LOF"],
+        "| No LOF Cell Lines:", stats$Count[stats$LOF_Status == "No LOF"],
+        "| p-value:", ifelse(is.na(p_value), "NA", p_value)
+      ),
+      x = "LOF Status",
+      y = "Drug Sensitivity"
+    )
+
+  # Print the statistics
+  print(stats)
+  print(paste("p-value:", ifelse(is.na(p_value), "Not enough data", p_value)))
+
+  # Display the plot
+  print(plot)
+}
+
+
+data_path <- "/Users/efraimshine/workspace/ai_agent_lab_data/"
+gene_name <- "PTEN (5728)"  # Replace with desired gene name
+drug_name <- "TEMSIROLIMUS (BRD:BRD-K84937637-001-09-9)"# Replace with desired drug name
+generate_boxplot(gene_name, drug_name, data_path)
+
+```
+
+```{r}
+# stupid drug screen candidates
+#
+df_for_screen <- prism_all_ttest_results
+df_for_screen$abs_effect_size <- abs(df_for_screen$effect_size)
+df_for_screen$minus_log_pvalue <- -log10(df_for_screen$p_value)
+
+df_for_screen <- df_for_screen %>% filter(effect_size > 1  & p_value < 0.0001)
+df_for_screen
+# df_for_screen <- df_for_screen %>% filter(p_value < 0.0001)
+ df_for_screen <- df_for_screen[order(df_for_screen$effect_size), ]
+# df_for_screen <- df_for_screen %>% filter(minus_log_pvalue > 6)
+# df_for_screen_to_print <- df_for_screen[1:1000, ]
+hist(df_for_screen$minus_log_pvalue)
+hist(df_for_screen$effect_size)
+
+df_for_screen
+
+#write.csv(df_for_screen, "/Users/efraimshine/Desktop/all_genes_all_drugs_prism/df_for_screen_to_print.csv", row.names = FALSE)
+```
+
+
+```{r}
+# Sample string
+# input_string <- "EMETINE _BRD:BRD-A25687296-300-04-3_"
+# 
+# # Replace "_" with "(" and ")"
+# output_string <- sub("_", "(", input_string)
+# output_string <- sub("_", ")", output_string)
+
+# Print the result
+# print(output_string)
+# 
+# 
+# df_for_screen$drug_names <- sub("_", "(", df_for_screen$drug)
+# df_for_screen$drug_names <- sub("_", ")", df_for_screen$drug)
+# df_for_screen$drug_names
+df_for_screen
+
+
+# Example usage
+data_path <- "/Users/efraimshine/workspace/ai_agent_lab_data/"
+gene_name <- "NCOR2 (9612)"  # Replace with desired gene name
+drug_name <- "EMETINE (BRD:BRD-A25687296-300-04-3)"# Replace with desired drug name
+#generate_boxplot(gene_name, drug_name, data_path)
+
+plot(df_for_screen$effect_size,df_for_screen$minus_log_pvalue)
+
+```
+```{r}
+
+```
+
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Define the plotting function
+generate_boxplot <- function(gene_name, drug_name, data_path, output_path) {
+  # Define file paths
+  lof_file <- file.path(data_path, "Depmap/OmicsSomaticMutationsMatrixDamaging.csv")
+  drug_file <- file.path(data_path, "Depmap/PRISM_Repurposing_Public_24Q2_subsetted.csv")
+
+  # Load data
+  lof_data <- read.csv(lof_file, row.names = 1, check.names = FALSE)
+  drug_data <- read.csv(drug_file, row.names = 1, check.names = FALSE)
+ 
+  # Ensure the gene and drug exist in the data
+  if (!(gene_name %in% colnames(lof_data))) {
+    stop("Gene not found in LOF data.")
+  }
+  if (!(drug_name %in% colnames(drug_data))) {
+    stop("Drug not found in drug sensitivity data.")
+  }
+
+  # Merge data based on cell line IDs
+  common_cell_lines <- intersect(rownames(lof_data), rownames(drug_data))
+  merged_data <- data.frame(
+    LOF = lof_data[common_cell_lines, gene_name],
+    Sensitivity = drug_data[common_cell_lines, drug_name]
+  )
+ 
+  # Filter out rows with NA in Sensitivity
+  merged_data <- merged_data %>%
+    filter(!is.na(Sensitivity))
+
+  # Classify cell lines based on LOF status
+  merged_data <- merged_data %>%
+    mutate(LOF_Status = ifelse(is.na(LOF), NA, ifelse(LOF > 0, "LOF", "No LOF")))
+
+  # Compute statistics
+  stats <- merged_data %>%
+    group_by(LOF_Status) %>%
+    summarise(
+      Count = n(),
+      Mean = mean(Sensitivity, na.rm = TRUE),
+      SD = sd(Sensitivity, na.rm = TRUE)
+    )
+
+  # Perform t-test
+  t_test <- t.test(Sensitivity ~ LOF_Status, data = merged_data, na.action = na.omit)
+  p_value <- t_test$p.value
+
+  # Create the plot
+  plot <- ggplot(merged_data, aes(x = LOF_Status, y = Sensitivity, color = LOF_Status)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.5) +
+    geom_jitter(width = 0.2) +
+    theme_minimal() +
+    labs(
+      title = paste("Sensitivity to", gsub(" .*", "", drug_name), "by LOF Status of", gene_name),
+      subtitle = paste(
+        "LOF Cell Lines:", stats$Count[stats$LOF_Status == "LOF"],
+        "| No LOF Cell Lines:", stats$Count[stats$LOF_Status == "No LOF"],
+        "| p-value:", signif(p_value, 3)
+      ),
+      x = "LOF Status",
+      y = "Drug Sensitivity"
+      
+    )
+  
+
+  # Save the plot as PNG
+  output_file <- file.path(output_path, paste0("Boxplot_", gene_name, "_", drug_name, ".png"))
+  #ggsave(output_file, plot = plot, width = 8, height = 6)
+  png(filename = output_file, width = 800, height = 600, res = 100)
+  print(plot)
+  dev.off()
+  
+
+  # Return statistics
+  return(list(stats = stats, p_value = p_value))
+}
+
+# Define the looping function
+generate_boxplots_for_all <- function(gene_drug_df, data_path, output_path) {
+  if (!dir.exists(output_path)) {
+    dir.create(output_path, recursive = TRUE)
+  }
+
+  for (i in seq_len(nrow(gene_drug_df))) {
+    gene_name <- gene_drug_df$Gene[i]
+    drug_name <- gene_drug_df$Drug[i]
+
+    tryCatch({
+      cat("Processing gene:", gene_name, "and drug:", drug_name, "\n")
+      generate_boxplot(gene_name, drug_name, data_path, output_path)
+    }, error = function(e) {
+      cat("Error processing gene:", gene_name, "and drug:", drug_name, ":", e$message, "\n")
+    })
+  }
+}
+
+# Example usage:
+output_prism_boxplots_path <- "/Users/efraimshine/Desktop/all_genes_all_drugs_prism/"
+data_path <- "/Users/efraimshine/workspace/ai_agent_lab_data/"
+gene_drug_df <- data.frame(Gene = c("TP53 (7157)", "TP53 (7157)"), Drug = c("RG7112 (BRD:BRD-A78210457-001-01-5)", "AMG-232 (BRD:BRD-K64925568-001-01-8)"))
+#generate_boxplots_for_all(gene_drug_df, data_path, output_prism_boxplots_path)
+
+```
+```{r}
+#creating many boxplot for yuval
+
+replace_underscores <- function(df, column_name) {
+  df[[column_name]] <- gsub("_(.*?)_", "(\\1)", df[[column_name]])
+  return(df)
+}
+
+
+top_effect_size_for_yuval <- prism_all_ttest_results %>% filter(p_value < 0.05)
+top_effect_size_for_yuval <- top_effect_size_for_yuval[order(-top_effect_size_for_yuval$effect_size), ]
+top_effect_size_for_yuval <- top_effect_size_for_yuval[1:100, ] 
+top_effect_size_for_yuval <- rename(top_effect_size_for_yuval, Gene = mutation)
+top_effect_size_for_yuval <- rename(top_effect_size_for_yuval, Drug = drug)
+top_effect_size_for_yuval <- replace_underscores(top_effect_size_for_yuval, "Drug")
+top_effect_size_for_yuval
+
+```
+```{r}
+# run the function to create 100 boxplots
+output_prism_boxplots_path <- "/Users/efraimshine/Desktop/all_genes_all_drugs_prism/boxplots_for_yuval/"
+data_path <- "/Users/efraimshine/workspace/ai_agent_lab_data/"
+#gene_drug_df <- data.frame(Gene = c("TP53 (7157)", "TP53 (7157)"), Drug = c("RG7112 (BRD:BRD-A78210457-001-01-5)", "AMG-232 (BRD:BRD-K64925568-001-01-8)"))
+#generate_boxplots_for_all(top_effect_size_for_yuval, data_path, output_prism_boxplots_path)
+```
+
+
+
+
+```{r}
+#get cell lines information for a gene and a drug
+
+
+# Load necessary libraries
+library(dplyr)
+
+# Define the function
+extract_cell_line_data <- function(gene_name, drug_name, data_path) {
+  # Define file paths
+  lof_file <- file.path(data_path, "Depmap/OmicsSomaticMutationsMatrixDamaging.csv")
+  drug_file <- file.path(data_path, "Depmap/PRISM_Repurposing_Public_24Q2_subsetted.csv")
+
+  # Load data
+  lof_data <- read.csv(lof_file, row.names = 1, check.names = FALSE)
+  drug_data <- read.csv(drug_file, row.names = 1, check.names = FALSE)
+
+  # Ensure the gene and drug exist in the data
+  if (!(gene_name %in% colnames(lof_data))) {
+    stop("Gene not found in LOF data.")
+  }
+  if (!(drug_name %in% colnames(drug_data))) {
+    stop("Drug not found in drug sensitivity data.")
+  }
+
+  # Merge data based on cell line IDs
+  common_cell_lines <- intersect(rownames(lof_data), rownames(drug_data))
+  merged_data <- data.frame(
+    Depmap_id = common_cell_lines,
+    LOF = lof_data[common_cell_lines, gene_name],
+    Sensitivity = drug_data[common_cell_lines, drug_name]
+  )
+  merged_data
+
+  # Filter out rows with NA in Sensitivity
+  merged_data <- merged_data %>%
+    filter(!is.na(Sensitivity))
+
+  # Classify cell lines based on LOF status
+  merged_data <- merged_data %>%
+    mutate(LOF_status = ifelse(is.na(LOF), NA, ifelse(LOF > 0, "LOF", "normal")))
+
+  # Select the desired columns
+  result <- merged_data %>%
+    select(Depmap_id, sensitivity_value = Sensitivity, LOF_status)
+  result$SD <- scale(result$sensitivity_value, center = TRUE, scale = TRUE)
+
+  return(result)
+}
+
+# Example usage
+data_path <- "/Users/efraimshine/workspace/ai_agent_lab_data/"
+gene_name <- "TP53 (7157)"  # Replace with desired gene name
+#drug_name <- "AMG-232 (BRD:BRD-K64925568-001-01-8)"  # Replace with desired drug name
+
+#RG7112 (BRD:BRD-A78210457-001-01-5)
+#AMG-232 (BRD:BRD-K64925568-001-01-8)
+#CGM097 (BRD:BRD-K79584249-001-01-3)
+#SAR405838 (BRD:BRD-A16035238-001-01-7)
+#IDASANUTLIN (BRD:BRD-K62627508-001-01-5)
+#MILADEMETAN (BRD:BRD-K00003406-001-01-9)
+
+cell_lines_info_for_p53_AMG_232 <- extract_cell_line_data(gene_name, "AMG-232 (BRD:BRD-K64925568-001-01-8)", data_path)
+cell_lines_info_for_p53_IDASANUTLIN <- extract_cell_line_data(gene_name, "IDASANUTLIN (BRD:BRD-K62627508-001-01-5)", data_path)
+cell_lines_info_for_p53_RG7112 <- extract_cell_line_data(gene_name, "RG7112 (BRD:BRD-A78210457-001-01-5)", data_path)
+cell_lines_info_for_p53_CGM097 <- extract_cell_line_data(gene_name, "CGM097 (BRD:BRD-K79584249-001-01-3)", data_path)
+cell_lines_info_for_p53_SAR405838 <- extract_cell_line_data(gene_name, "SAR405838 (BRD:BRD-A16035238-001-01-7)", data_path)
+cell_lines_info_for_p53_MILADEMETAN <- extract_cell_line_data(gene_name, "MILADEMETAN (BRD:BRD-K00003406-001-01-9)", data_path)
+```
+
+
+```{r}
+# ACH-000963
+# ACH-001508
+# ACH-002522
+# ACH-001060
+# ACH-000311
+# ACH-002115
+# ACH-001193
+# ACH-001332
+# ACH-000087
+
+cell_lines_with_pc176f_mutation <- c("ACH-001508","ACH-002522","ACH-001060","ACH-000311","ACH-002115","ACH-001193","ACH-001332","ACH-000087")
+
+cell_lines_info_for_p53_AMG_232_filtered <- cell_lines_info_for_p53_AMG_232 %>% filter(Depmap_id %in% cell_lines_with_pc176f_mutation)
+cell_lines_info_for_p53_AMG_232_filtered
+
+cell_lines_info_for_p53_IDASANUTLIN_filtered <- cell_lines_info_for_p53_IDASANUTLIN %>% filter(Depmap_id %in% cell_lines_with_pc176f_mutation)
+cell_lines_info_for_p53_IDASANUTLIN_filtered
+
+cell_lines_info_for_p53_RG7112_filtered <- cell_lines_info_for_p53_RG7112 %>% filter(Depmap_id %in% cell_lines_with_pc176f_mutation)
+cell_lines_info_for_p53_RG7112_filtered
+
+cell_lines_info_for_p53_CGM097_filtered <- cell_lines_info_for_p53_CGM097 %>% filter(Depmap_id %in% cell_lines_with_pc176f_mutation)
+cell_lines_info_for_p53_CGM097_filtered
+
+cell_lines_info_for_p53_SAR405838_filtered <- cell_lines_info_for_p53_SAR405838 %>% filter(Depmap_id %in% cell_lines_with_pc176f_mutation)
+cell_lines_info_for_p53_SAR405838_filtered
+
+
+cell_lines_info_for_p53_MILADEMETAN_filtered <- cell_lines_info_for_p53_MILADEMETAN %>% filter(Depmap_id %in% cell_lines_with_pc176f_mutation)
+cell_lines_info_for_p53_MILADEMETAN_filtered
+```
+
+
+
+```{r}
+# explore cell line info results
+
+# p53_AMG_232_lof <- cell_lines_info_for_p53_AMG_232 %>% filter(LOF_status == "LOF")
+# p53_AMG_232_normal <- cell_lines_info_for_p53_AMG_232 %>% filter(LOF_status == "normal")
+# p53_AMG_232_lof_outliers <- p53_AMG_232_lof %>% filter(sensitivity_value < -2)
+# p53_AMG_232_lof
+# p53_AMG_232_normal
+# p53_AMG_232_lof_outliers
+
+AMG_232_outliers <- cell_lines_info_for_p53_AMG_232 %>% filter(sensitivity_value < -2 & LOF_status == "LOF")
+IDASANUTLIN_outliers <- cell_lines_info_for_p53_IDASANUTLIN %>% filter(sensitivity_value < -2 & LOF_status == "LOF")
+RG7112_outliers <-  cell_lines_info_for_p53_RG7112 %>% filter(sensitivity_value < -2 & LOF_status == "LOF")
+CGM097_outliers <-  cell_lines_info_for_p53_CGM097 %>% filter(sensitivity_value < -2 & LOF_status == "LOF")
+SAR405838_outliers <- cell_lines_info_for_p53_SAR405838 %>% filter(sensitivity_value < -2 & LOF_status == "LOF")
+MILADEMETAN_outliers <- cell_lines_info_for_p53_MILADEMETAN %>% filter(sensitivity_value < -2 & LOF_status == "LOF")
+
+AMG_232_outliers
+IDASANUTLIN_outliers
+RG7112_outliers
+CGM097_outliers
+SAR405838_outliers
+MILADEMETAN_outliers
+
+intersection <- intersect(AMG_232_outliers$Depmap_id, MILADEMETAN_outliers$Depmap_id)
+intersection_all <- Reduce(intersect, list(AMG_232_outliers$Depmap_id, MILADEMETAN_outliers$Depmap_id)) 
+```
+```{r}
+#count the number of outluluers cell lines in all 6 drugs
+library(dplyr)
+
+# Assuming your data frames are named df1, df2, ..., df6
+
+# Create a list of all data frames
+df_list <- list(AMG_232_outliers, IDASANUTLIN_outliers, RG7112_outliers, CGM097_outliers, SAR405838_outliers, MILADEMETAN_outliers)
+
+# Combine all data frames into a single data frame
+combined_df <- bind_rows(df_list, .id = "df_id") 
+
+# Count the occurrences of each Depmap_id across all data frames
+result_df <- combined_df %>% 
+  group_by(Depmap_id) %>% 
+  summarize(count = n_distinct(df_id))
+
+# Print the result
+print(result_df[order(-result_df$count),])
+```
+
+
+```{r}
+# load p53 mutation file 
+p53_mutations_depmap <- read.csv("~/workspace/ai_agent_lab_data/depmap/p53_files/TP53_mutations.csv")
+p53_mutations_depmap
+
+p53_mutations_depmap %>% filter(Depmap.Id %in% c("ACH-000862","ACH-000356","ACH-000311","ACH-000947","ACH-000959","ACH-000485","ACH-000963"))
+
+```
+
+
+
+
+```{r}
+# explore cell line info results- creating boxplots from the cell lnes information output
+# Load necessary library
+library(ggplot2)
+
+# Define the function
+create_lof_boxplot <- function(data_df, gene_name, drug_name) {
+  # Check if the required columns exist in the input dataframe
+  required_columns <- c("Depmap_id", "sensitivity_value", "LOF_status")
+  if (!all(required_columns %in% colnames(data_df))) {
+    stop("Input dataframe does not contain the required columns: Depmap_id, sensitivity_value, LOF_status")
+  }
+
+  # Create the boxplot
+  plot <- ggplot(data_df, aes(x = LOF_status, y = sensitivity_value, color = LOF_status)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.5) +
+    geom_jitter(width = 0.2) +
+    theme_minimal() +
+    labs(
+      title = paste("Sensitivity to", gsub(" .*", "", drug_name), "by LOF Status of", gene_name),
+      x = "LOF Status",
+      y = "Drug Sensitivity"
+    ) +
+    scale_color_manual(values = c("LOF" = "red", "normal" = "blue"))
+
+  # Print and return the plot
+  return(plot)
+}
+
+# Example usage
+#Assuming result_df is the dataframe returned by the previous function
+gene_name <- "TP53 (7157)"
+drug_name <- "AMG-232 (BRD:BRD-K64925568-001-01-8)"
+create_lof_boxplot(cell_lines_info_for_p53_AMG_232, gene_name, drug_name)
+
+```
+```{r}
+#exploration for maytal
+
+prism_all_ttest_results
+
+# Define the vector with the given items
+items <- c("DPYD", "CDX2", "ABCC11", "FOXM1", "ABCC10", "ABCC5", 
+           "NT5E", "TYMP", "MTHFR", "SphK2", "S1PR2", "dpys", "upb1")
+
+# Convert all items to uppercase
+items_upper <- toupper(items)
+
+
+```
+```{r}
+#plots for maytal
+# DPYD..1806.
+# CDX2..1045.
+# ABCC11..85320.
+# FOXM1..2305.
+# ABCC10..89845.
+# ABCC5..10057.
+# NT5E..4907.
+# TYMS..7298.
+# MTHFR..4524.
+# S1PR2..9294.
+# DPYS..1807.
+# UPB1..51733.
+# Transformed vector
+items <- c(
+  "DPYD (1806)",
+  "CDX2 (1045)",
+  "ABCC11 (85320)",
+  "FOXM1 (2305)",
+  "ABCC10 (89845)",
+  "ABCC5 (10057)",
+  "NT5E (4907)",
+  "TYMS (7298)",
+  "MTHFR (4524)",
+  "S1PR2 (9294)",
+  "DPYS (1807)",
+  "UPB1 (51733)"
+)
+
+
+prism_all_ttest_results
+#drug_file %>% select(FLUOROURACIL_BRD.BRD-K24844714-001-24-5_)
+# Print the vector
+maytal_genes_df <- data.frame(Gene = items, Drug = "FLUOROURACIL (BRD:BRD-K24844714-001-24-5)")
+maytal_genes_df
+
+# run the function to create 100 boxplots
+output_prism_boxplots_path_maytal <- "/Users/efraimshine/Desktop/all_genes_all_drugs_prism/boxplots_for_maytal/"
+data_path <- "/Users/efraimshine/workspace/ai_agent_lab_data/"
+#gene_drug_df <- data.frame(Gene = c("TP53 (7157)", "TP53 (7157)"), Drug = c("RG7112 (BRD:BRD-A78210457-001-01-5)", "AMG-232 (BRD:BRD-K64925568-001-01-8)"))
+generate_boxplots_for_all(maytal_genes_df, data_path, output_prism_boxplots_path_maytal)
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
