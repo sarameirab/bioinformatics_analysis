@@ -46,7 +46,7 @@ def generate_boxplot(gene_name, drug_name):
     merged_data = merged_data.dropna(subset=['Sensitivity'])
 
     # Classify cell lines based on LOF status
-    merged_data['LOF_Status'] = merged_data['LOF'].apply(lambda x: 'LOF' if x == 2 else ('No LOF' if x == 0 else None))
+    merged_data['LOF_Status'] = merged_data['LOF'].apply(lambda x: 'LOF' if x >0 else ('No LOF' if x == 0 else None))
 
     # Compute statistics
     stats_df = merged_data.groupby('LOF_Status')['Sensitivity'].agg(
@@ -98,6 +98,9 @@ def generate_boxplot(gene_name, drug_name):
 
 
 # Example usage
-gene_name = "PARD3 (56288)"
-drug_name = "BICALUTAMIDE (BRD:BRD-A29485665-001-12-8)"
+# gene_name = "CXCL9 (4283)"
+# drug_name = "BUTACLAMOL (BRD:BRD-K23082237-003-01-5)"
+# generate_boxplot(gene_name, drug_name)
+gene_name = "MED12L (116931)"
+drug_name = "BUTACLAMOL (BRD:BRD-K23082237-003-01-5)"
 generate_boxplot(gene_name, drug_name)
