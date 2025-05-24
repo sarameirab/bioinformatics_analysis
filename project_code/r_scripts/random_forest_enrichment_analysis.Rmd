@@ -114,4 +114,9 @@ result <- enrichGO(gene = top_gene_names,
 result_df <- as.data.frame(result)
 result_df
 ```
+```{r}
+source("enrichment_analysis.R")
+results_df <- run_enrichment_analysis_on_drug(drug_name, sorted_random_forest_results, GENE_SLICE)
+results_df
+```
 
