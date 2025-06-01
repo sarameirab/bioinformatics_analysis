@@ -6,6 +6,7 @@ output: html_document
 ```{r}
 library("googledrive")
 source("download_data.R")
+source("enrichment_analysis.R")
 ```
 
 
@@ -13,7 +14,8 @@ source("download_data.R")
 library("digest")
 
 
-output_file_path <-download_url(RANDOM_FOREST_RESULTS_URL)
+random_forest_inital_restults_path <-download_url(RANDOM_FOREST_RESULTS_URL)
+random_forest_optimized_results_path <- download_url(RANDOM_FOREST_OPTIMIZED_RESULTS_URL)
 #download_url_csv <- "https://drive.google.com/file/d/1n8hV1mfLbsqR-zABud4JX1LccxhVhRH9"
 ```
 
@@ -21,102 +23,59 @@ output_file_path <-download_url(RANDOM_FOREST_RESULTS_URL)
 ```{r}
 #x <- drive_get(download_url_csv)
 
-random_forest_results <- read.csv(output_file_path)
+random_forest_results <- read.csv(random_forest_inital_restults_path)
+random_forest_optimized_results <- read.csv(random_forest_optimized_results_path)
 ```
 
 
 ```{r}
-library(dplyr)
-
-sorted_random_forest_results <- random_forest_results %>%
-  arrange(desc(pearson_correlation))
-gene_symbols <- names(sorted_random_forest_results)[-c(1:4)]
-gene_symbols <- sub("\\.\\..*$", "", gene_symbols)  # remove everything after and including '..'
-
-# Create a new row where the first 4 columns are NA and the rest are gene symbols
-new_row <- c(rep(NA, 4), gene_symbols)
-
-# Bind the new row at the top of the dataframe
-sorted_random_forest_results <- rbind(new_row, sorted_random_forest_results)
-
-
-
-
-sorted_random_forest_results
-
+random_forest_results
 ```
 
 
 ```{r}
-library("clusterProfiler")
-library("org.Hs.eg.db")
-
+random_forest_optimized_results
 ```
 
 ```{r}
-random_forest_results_20_best_drugs <- sorted_random_forest_results %>%
-  slice_head(n = 50)
-
-
-random_forest_results_20_best_drugs
+prepered_results_initial <- prepare_results_data(random_forest_results)
+prepared_results_optimized <- prepare_results_data(random_forest_optimized_results)
 ```
+
+```{r}
+prepered_results_initial
+prepared_results_optimized
+```
+
 ```{r}
 drug_name<- "POLYDATIN (BRD:BRD-K43236057-001-07-1)"
-#drug_name <- "BUTACLAMOL (BRD:BRD-K23082237-003-01-5)"
-GSK_df <- random_forest_results_20_best_drugs[c(1, which(random_forest_results_20_best_drugs$drug == drug_name)), ]
-GSK_df
-
-GSK_df_subsetted <- GSK_df[, -c(1:4)]
-transposed_GSK_df_subsetted <- t(GSK_df_subsetted) %>% as.data.frame() 
-transposed_GSK_df_subsetted[[2]] <- as.numeric(transposed_GSK_df_subsetted[[2]])
-# Sort rows by the second column (column index 2) in descending order
-transposed_GSK_df_subsetted_sorted <- transposed_GSK_df_subsetted[order(transposed_GSK_df_subsetted[[2]], decreasing = TRUE), ]
-transposed_GSK_df_subsetted_sorted
-
-```
-```{r}
-col2 <- as.numeric(transposed_GSK_df_subsetted_sorted[[2]])
-
-# Loop to find the first index where all remaining values are 0
-zero_start_index <- NA
-for (i in seq_along(col2)) {
-  if (all(col2[i:length(col2)] == 0)) {
-    zero_start_index <- i
-    break
-  }
-}
-
-# Print the result
-if (!is.na(zero_start_index)) {
-  print(zero_start_index)
-} else {
-  print("No such index: there's no stretch where all remaining values are 0.")
-}
-```
-
-
-```{r}
 GENE_SLICE <- 100
-top_gene_names <- transposed_GSK_df_subsetted_sorted[1:GENE_SLICE, 1]
-top_gene_names
-```
-
-```{r}
-result <- enrichGO(gene = top_gene_names, 
-         OrgDb = org.Hs.eg.db, 
-         keyType = "SYMBOL", 
-         ont = "BP", 
-         pvalueCutoff = 0.2)
 
 ```
 
+
 ```{r}
-result_df <- as.data.frame(result)
-result_df
+# View the result
+prepared_results_optimized_filtered_only_positive_values <- filter_to_include_gene_names_with_score_higher_than(prepared_results_optimized, drug_name, 0)
+```
+
+```{r}
+prepared_results_optimized_filtered_only_positive_values
+```
+
+
+```{r}
+results_old <- run_enrichment_analysis_on_drug(drug_name, prepered_results_initial, GENE_SLICE)
+results_optimized <- run_enrichment_analysis_on_drug(drug_name, prepared_results_optimized_filtered_only_positive_values, -1)
+
+results_old
+results_optimized
 ```
 ```{r}
-source("enrichment_analysis.R")
-results_df <- run_enrichment_analysis_on_drug(drug_name, sorted_random_forest_results, GENE_SLICE)
-results_df
+old_results <- read.csv("~/workspace/bioinformatics_analysis/data/MILADEMETAN__BRD_BRD_K00003406_001_01_9_.csv")
+old_results
+```
+```{r}
+write.csv(results_optimized, "~/workspace/bioinformatics_analysis/data/POLYDATIN_BRD_BRD_K43236057_001_07_1_optimizied.csv", row.names = FALSE)
 ```
 

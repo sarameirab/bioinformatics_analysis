@@ -1,0 +1,37 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+```{r}
+mutated_samples_path <- download_url("https://drive.google.com/file/d/1wLxQFgHJ1aW-r-jTnXV7btngA1Bcpm3C")
+```
+
+```{r}
+#mutated_samples_path <- "C:/Users/vikashk/Desktop/g6pd_cbioportal_mutated/mutated_samples.tsv"
+library(readr)
+#mutated_samples <- read_tsv(mutated_samples_path)
+mutated_samples <- read_tsv(mutated_samples_path)
+```
+```{r}
+library(dplyr)
+library(stringr)
+
+significant_impacted_samples <- mutated_samples %>%
+  filter(str_detect(`Functional Impact`, regex("MutationAssessor: high|impact: deleterious|impact: probably_damaging|pathogenicity: pathogenic", ignore_case = TRUE)))
+significant_impacted_samples
+high_allele_frequency <- significant_impacted_samples %>% filter(`Allele Freq (T)` > 0.4)
+high_allele_frequency
+```
+```{r}
+w
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.

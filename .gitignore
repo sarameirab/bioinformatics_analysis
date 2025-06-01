@@ -13,5 +13,8 @@
 **/*.html
 **/*.RDataTmp
 venv
+**/*.h5
+data
+**/*.csv#
 
 
