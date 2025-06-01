@@ -1,0 +1,176 @@
+---
+title: "DESEQ_TCGA_ALL_SAMPLES_DISK_OPTIMIZATION"
+output: html_document
+---
+
+```{r}
+library("UCSCXenaTools")
+library("R.utils")
+library("dplyr")
+library("data.table")
+library("readr")
+#library("edgeR")
+setwd("~/Desktop/rna_seq/TCGA")
+source("~/workspace/bioinformatics_analysis/project_code/r_scripts/download_data.R")
+
+
+```
+
+
+```{r}
+setwd("~/Desktop/rna_seq/TCGA")
+
+data("XenaData")
+write.csv(XenaData, "00_tblXenaHubInfo.csv")
+
+## step 5-a
+GeneExpectedCnt_toil = XenaGenerate(subset = XenaHostNames == "toilHub") %>% 
+  XenaFilter(filterCohorts = "TCGA TARGET GTEx") %>%
+  XenaFilter(filterDatasets = "TcgaTargetGtex_gene_expected_count");
+XenaQuery(GeneExpectedCnt_toil) %>%
+  XenaDownload(destdir = "./")
+samples_gene_expression = fread("TcgaTargetGtex_gene_expected_count.gz");
+```
+
+```{r}
+g6pd_deleted_samples_file <-download_url("https://drive.google.com/file/d/1BxjcimPvrUOFOzLLbkwWc0fqyQGOLyju") #deleted samples
+#sample_file_g6pd_control_normal_expression_file <- download_url("https://drive.google.com/file/d/1oRrh-GFLyv9J7lu2xChizBLKYMjHadu1") # 200 samples ctr
+#sample_file_g6pd_control_normal_expression_file <- download_url("https://drive.google.com/file/d/18Io0Je293DopXAmz163wsALnf17UBxsu") # 2000 middle expression g6pd normal
+#sample_file_g6pd_control_normal_expression_file <- #download_url("https://drive.google.com/file/d/1VpjKXenSSWBewblp2GH7FWTV9n0ftwJB")#G6PD_normal_cancer_type_based_selection_not_metastatic.csv (~1400 samples)
+TCGA_samples_data_path <- download_url("https://drive.google.com/file/d/1ELYxyn6lnF__Pc7YX2NtiitwWCCZNq-n", type="tsv")
+g6pd_mutated_path_for_filtering <- download_url("https://drive.google.com/file/d/1wLxQFgHJ1aW-r-jTnXV7btngA1Bcpm3C", type="tsv")#deleted and mutated samples together
+
+```
+
+```{r}
+TCGA_samples_data_df <- read_tsv(TCGA_samples_data_path)
+g6pd_mutated_for_filtering <- read_tsv(g6pd_mutated_path_for_filtering)
+g6pd_deleted_samples <- read_csv(g6pd_deleted_samples_file)
+```
+```{r}
+control_samples_vector <- TCGA_samples_data_df$`Sample ID`
+paste("all samples length", length(control_samples_vector))
+mutated_samples_to_filter <- g6pd_mutated_for_filtering$`Sample ID`
+paste("mutated samples length", length(mutated_samples_to_filter))
+treatment_samples_vector_deleted <- g6pd_deleted_samples[[1]]
+paste("mutated deleted samples", length(treatment_samples_vector_deleted))
+
+
+control_samples_vector <- control_samples_vector[!control_samples_vector %in% mutated_samples_to_filter]
+control_samples_vector <- control_samples_vector[!control_samples_vector %in% treatment_samples_vector_deleted]
+
+paste("Filtered samples length", length(control_samples_vector))
+
+common_values <- intersect(mutated_samples_to_filter, control_samples_vector)
+paste("Length of Intersection after filtering (expected to be 0):", length(common_values))
+
+common_values <- intersect(treatment_samples_vector_deleted, control_samples_vector)
+paste("Length of Intersection between deleted and control (expected to be 0):", length(common_values))
+
+```
+
+
+```{r}
+create_back_transformed_df <- function(samples_vector, gene_expression_data) {
+
+
+  # Filter out excluded samples
+  filtered_vector <- samples_vector[samples_vector %in% colnames(gene_expression_data)]
+
+
+  # Filter the gene expression data
+  filtered_df <- gene_expression_data %>% dplyr::select("sample", all_of(filtered_vector))
+  rownames(filtered_df) <- filtered_df$sample
+  
+  # Backtransform the numeric columns
+  backtransformed_df <- filtered_df %>%
+    mutate(across(where(is.numeric), ~ 2^. - 1))
+  rownames(backtransformed_df) <- backtransformed_df$sample
+  # Set row names and remove the first column
+
+  return(backtransformed_df)
+}
+
+
+# Call the function and store the result
+g6pd_del_df <- create_back_transformed_df(treatment_samples_vector_deleted, samples_gene_expression)
+g6pd_normal_control_df <- create_back_transformed_df(control_samples_vector, samples_gene_expression)
+
+```
+
+```{r}
+# Define the arguments
+library("data.table")
+library("readr")
+library("dplyr")
+
+
+
+merged_df <- merge(g6pd_del_df, g6pd_normal_control_df, by.x="sample",by.y = "sample")
+head(merged_df)
+first_36_names <- colnames(merged_df)[1:36]   # or names(df)[1:36]
+colnames(g6pd_del_df)
+first_36_names
+```
+```{r}
+merged_df_rownames <- merged_df[,-1]
+rownames(merged_df_rownames) <- merged_df$sample
+merged_df_rownames_rounded <- merged_df_rownames %>% mutate(across(where(is.numeric), round, digits = 0))
+matrix_for_deseq <- as.matrix(merged_df_rownames_rounded)
+rownames(matrix_for_deseq) <- rownames(merged_df_rownames_rounded)
+```
+
+```{r}
+rm(samples_gene_expression, XenaData); gc()
+```
+
+```{r}
+library(dplyr)
+
+wanted_TCGA_columns <- c("Sample ID", "Cancer Type", "Sample Type")
+
+metadata <- data.frame(sample_names <- colnames(merged_df[,-1]))
+#row.names(metadata) <- colnames(merged_df)
+  metadata <- mutate(metadata, G6PD_STATUS = ifelse(row_number() <= length(g6pd_del_df[,-1]), "del", "normal"))
+  
+#metadata <- merge(metadata, TCGA_samples_data_df[, wanted_TCGA_columns], by.x = names(metadata)[1], by.y = "Sample ID", all.x = TRUE)
+
+metadata <- metadata %>%
+  left_join(TCGA_samples_data_df[, wanted_TCGA_columns], by = setNames("Sample ID", names(metadata)[1]))
+
+names(metadata)[names(metadata) == "Cancer Type"] <- "cancer_type"
+
+names(metadata)[names(metadata) == "Sample Type"] <- "sample_type"
+
+metadata_rnames <- metadata
+rownames(metadata_rnames) <- metadata$sample_names....colnames.merged_df
+metadata_rnames$sample_names....colnames.merged_df....1.. <- NULL
+#metadata
+#metadata_rnames
+```
+
+```{r}
+library(HDF5Array)
+deseq_matrix_path <- "deseq_all_samples_vs_deleted.h5"
+
+# Convert and save matrix to HDF5
+writeHDF5Array(matrix_for_deseq, filepath = deseq_matrix_path, name = "expr")
+
+# Load as disk-backed object
+h5_mat <- HDF5Array(deseq_matrix_path, name = "expr")
+
+```
+```{r}
+library("DESeq2")
+library("BiocParallel")
+register(MulticoreParam(workers = 4)) 
+dds <- DESeqDataSetFromMatrix(countData = matrix_for_deseq,
+                              colData = metadata_rnames,
+                              design = ~cancer_type + G6PD_STATUS)
+
+dds$G6PD_STATUS <- relevel(dds$G6PD_STATUS, ref = "normal")
+smallestGroupSize <- 3
+keep <- rowSums(counts(dds) >= 10) >= smallestGroupSize
+dds <- dds[keep,]
+```
+

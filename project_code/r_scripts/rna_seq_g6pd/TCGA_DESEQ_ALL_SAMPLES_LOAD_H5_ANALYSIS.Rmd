@@ -1,0 +1,13 @@
+---
+title: "TCGA_DESEQ_ALL_SAMPLES_LOAD_H5_ANALYSIS"
+output: html_document
+---
+
+```{r}
+library(HDF5Array)
+deseq_matrix_path <- "deseq_all_samples_vs_deleted.h5"
+
+# Load as disk-backed object
+h5_mat <- HDF5Array(deseq_matrix_path, name = "expr")
+```
+
