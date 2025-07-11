@@ -150,6 +150,11 @@ metadata_rnames$sample_names....colnames.merged_df....1.. <- NULL
 ```
 
 ```{r}
+write.csv(metadata, "metadata_rnames.csv", row.names = FALSE)
+
+```
+
+```{r}
 library(HDF5Array)
 deseq_matrix_path <- "deseq_all_samples_vs_deleted.h5"
 

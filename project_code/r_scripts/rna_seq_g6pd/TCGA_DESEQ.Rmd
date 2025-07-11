@@ -35,15 +35,35 @@ samples_gene_expression = fread("TcgaTargetGtex_gene_expected_count.gz");
 
 
 ```{r}
-g6pd_deleted_samples_file <-download_url("https://drive.google.com/file/d/1BxjcimPvrUOFOzLLbkwWc0fqyQGOLyju") #deleted samples
+#g6pd_deleted_samples_file <-download_url("https://drive.google.com/file/d/1BxjcimPvrUOFOzLLbkwWc0fqyQGOLyju") #deleted samples
 #sample_file_g6pd_control_normal_expression_file <- download_url("https://drive.google.com/file/d/1oRrh-GFLyv9J7lu2xChizBLKYMjHadu1") # 200 samples ctr
-sample_file_g6pd_control_normal_expression_file <- download_url("https://drive.google.com/file/d/18Io0Je293DopXAmz163wsALnf17UBxsu") # 2000 middle expression g6pd normal
+#sample_file_g6pd_control_normal_expression_file <- download_url("https://drive.google.com/file/d/18Io0Je293DopXAmz163wsALnf17UBxsu") # 2000 middle expression g6pd normal
+#sample_file_g6pd_control_normal_expression_file <- download_url("https://drive.google.com/file/d/1fONWXejRx9xvKKJr-6cdbrhrMHK2PAvA") # propensity score controls for deleted samples
 #sample_file_g6pd_control_normal_expression_file <- #download_url("https://drive.google.com/file/d/1VpjKXenSSWBewblp2GH7FWTV9n0ftwJB")#G6PD_normal_cancer_type_based_selection_not_metastatic.csv (~1400 samples)
 TCGA_samples_data_path <- download_url("https://drive.google.com/file/d/1ELYxyn6lnF__Pc7YX2NtiitwWCCZNq-n", type="tsv")
 #g6pd_deleted_samples_file <- download_url("https://drive.google.com/file/d/1eRDm68CTg2e4tUvJrJWWoYaJCPnNJm_v")#deleted and mutated samples together
+#propensity_score_deleted_and_mutated_controls <- download_url("https://drive.google.com/file/d/139-ugep8A6yxC3MabSpDJN_nAqWP6A5C")
+#propensity_score_deleted_and_mutated_treatment <-  download_url("https://drive.google.com/file/d/1fhugBDQBFy4DnbR_PswH8X_-KGgWxne2")
+
+propensity_score_deleted_and_mutated_without_cancer_stage_matching <- download_url("https://drive.google.com/file/d/1wGqpQXIAfHiENczl7CAkSzmneIg-wtk3")
+propensity_score_not_deleted_and_mutated_without_cancer_stage_matching <- download_url("https://drive.google.com/file/d/1sfvhe3iKx_NASMDFEcAweGtmnXrQD5MT")
+propensity_score_deleted_and_mutated_without_cancer_stage_matching
+
+propensity_score_not_deleted_and_mutated_without_cancer_stage_matching
 ```
+
+```{r}
+sample_file_g6pd_control_normal_expression_file <- propensity_score_not_deleted_and_mutated_without_cancer_stage_matching
+g6pd_deleted_samples_file <- propensity_score_deleted_and_mutated_without_cancer_stage_matching
+sample_file_g6pd_control_normal_expression_file
+g6pd_deleted_samples_file
+```
+
+
 ```{r}
 TCGA_samples_data_df <- read_tsv(TCGA_samples_data_path)
+read.csv(sample_file_g6pd_control_normal_expression_file)
+read.csv(g6pd_deleted_samples_file)
 ```
 
 
@@ -81,6 +101,8 @@ g6pd_normal_control_df <- create_back_transformed_df(sample_file_g6pd_control_no
 #g6pd_del_df
 
 ```
+
+
 ```{r}
 # checking control data frame samples
 # ctr_rnames <- colnames(g6pd_normal_control_df[,-1])
@@ -90,7 +112,8 @@ g6pd_normal_control_df <- create_back_transformed_df(sample_file_g6pd_control_no
 # common_names <- intersect(ctr_rnames,ctr_orig_df$Sample.ID)
 # common_names
 # print(common_names)
-
+g6pd_normal_control_df
+g6pd_del_df
 ```
 
 
@@ -222,15 +245,15 @@ names_df$`data_col <- colnames(matrix_for_deseq)` == rownames(names_df)
 library("DESeq2")
 library("BiocParallel")
 rm(samples_gene_expression, XenaData); gc()
-register(MulticoreParam(workers = 4)) 
+register(MulticoreParam(workers = 12)) 
 dds <- DESeqDataSetFromMatrix(countData = matrix_for_deseq,
                               colData = metadata_rnames,
-                              design = ~cancer_type + G6PD_STATUS)
+                              design = ~G6PD_STATUS)
 dds$G6PD_STATUS <- relevel(dds$G6PD_STATUS, ref = "normal")
 # smallestGroupSize <- 3
 # keep <- rowSums(counts(dds) >= 10) >= smallestGroupSize
-#dds <- dds[keep,]
-#dds
+# dds <- dds[keep,]
+dds
 ```
 ```{r}
 dds <- DESeq(dds,parallel = TRUE)
@@ -379,12 +402,14 @@ gsea_res <- gseGO(genes_for_gsea,
              eps = 1e-300)
 ```
 ```{r}
-as.data.frame(gsea_res)
+gsea_res_df <- as.data.frame(gsea_res)
+gsea_res_df
 ```
 ```{r}
+fatty_acid_catabolic_process <- "GO:0009062"
 atty_acid_beta_oxidation_using_acyl_CoA_dehydrogenase <-"GO:0033539"
 lipid_catabolic_process	 <- "GO:0016042"
-fit_gsea <- gseaplot(gsea_res, geneSetID = lipid_catabolic_process ,title = "fatty acid beta-oxidation")
+fit_gsea <- gseaplot(gsea_res, geneSetID = fatty_acid_catabolic_process ,title = "fatty acid catabolic process")
 fit_gsea
 
 ```
@@ -392,7 +417,8 @@ fit_gsea
 
 
 ```{r}
-fit <- plot(barplot(GO_results, showCategory = 20))
+fit <- plot(barplot(GO_results, showCategory = 30))
+fit
 png("out.png", res = 250, width = 1400, height = 1800)
 print(fit)
 dev.off()

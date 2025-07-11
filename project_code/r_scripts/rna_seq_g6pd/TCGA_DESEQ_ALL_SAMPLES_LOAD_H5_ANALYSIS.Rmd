@@ -8,6 +8,39 @@ library(HDF5Array)
 deseq_matrix_path <- "deseq_all_samples_vs_deleted.h5"
 
 # Load as disk-backed object
-h5_mat <- HDF5Array(deseq_matrix_path, name = "expr")
+
+matrix_for_deseq <- HDF5Array(deseq_matrix_path, name = "expr")
+metadata <- read.csv("metadata_rnames.csv")
+rownames(metadata) <- metadata$sample_names....colnames.merged_df
+metadata$sample_names....colnames.merged_df....1.. <- NULL
+metadata
 ```
+
+
+```{r}
+library(DESeq2)
+library(BiocParallel)
+register(MulticoreParam(workers = 1))
+
+dds <- DESeqDataSetFromMatrix(
+  countData = matrix_for_deseq,
+  colData = metadata,
+  design = ~cancer_type + G6PD_STATUS
+)
+
+dds$G6PD_STATUS <- relevel(dds$G6PD_STATUS, ref = "normal")
+smallestGroupSize <- 3
+keep <- rowSums(counts(dds) >= 10) >= smallestGroupSize
+dds <- dds[keep,]
+
+```
+
+```{r}
+dds <- DESeq(dds,parallel = TRUE)
+res <- results(dds,parallel = TRUE)
+res
+
+```
+
+
 

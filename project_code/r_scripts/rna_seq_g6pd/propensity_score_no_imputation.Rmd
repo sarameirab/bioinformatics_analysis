@@ -1,0 +1,343 @@
+---
+title: "propensity_score_no_imputation"
+output: html_document
+---
+
+---
+title: "propensity_score_second_version"
+output: html_document
+---
+
+---
+title: "TCGA_DESEQ2_propensity_score_matching"
+output: html_document
+---
+
+
+```{r}
+library("UCSCXenaTools")
+library("R.utils")
+library("dplyr")
+library("data.table")
+library("readr")
+library(MatchIt)
+library(tidyr)
+library(stringr)
+source("~/workspace/bioinformatics_analysis/project_code/r_scripts/download_data.R")
+```
+```{r}
+setwd("~/Desktop/rna_seq/TCGA")
+
+data("XenaData")
+write.csv(XenaData, "00_tblXenaHubInfo.csv")
+
+## step 5-a
+GeneExpectedCnt_toil = XenaGenerate(subset = XenaHostNames == "toilHub") %>% 
+  XenaFilter(filterCohorts = "TCGA TARGET GTEx") %>%
+  XenaFilter(filterDatasets = "TcgaTargetGtex_gene_expected_count");
+XenaQuery(GeneExpectedCnt_toil) %>%
+  XenaDownload(destdir = "./")
+samples_gene_expression = fread("TcgaTargetGtex_gene_expected_count.gz");
+
+```
+```{r}
+samples_availible_in_xena <- colnames(samples_gene_expression)[-1] #first column is gene names
+
+```
+
+```{r}
+TCGA_samples_data_path <- download_url("https://drive.google.com/file/d/1ELYxyn6lnF__Pc7YX2NtiitwWCCZNq-n", type="tsv")
+#g6pd_deleted_samples_file <-download_url("https://drive.google.com/file/d/1BxjcimPvrUOFOzLLbkwWc0fqyQGOLyju") #deleted samples
+g6pd_deleted_and_mutated_samples_file <- download_url("https://drive.google.com/file/d/1eRDm68CTg2e4tUvJrJWWoYaJCPnNJm_v")#deleted and mutated samples together
+
+g6pd_deleted_samples_file <- g6pd_deleted_and_mutated_samples_file
+```
+
+```{r}
+#preparing TCGA samples information and taking only samples availible in xena servers
+TCGA_samples_info <- read_tsv(TCGA_samples_data_path, col_names = TRUE, show_col_types = FALSE)
+colnames(TCGA_samples_info) <- gsub("\\s+", "_", colnames(TCGA_samples_info))
+
+#filtering only samples that are available in xena
+
+TCGA_samples_availible_in_xena_info <- TCGA_samples_info %>% filter(Sample_ID %in% samples_availible_in_xena)
+
+TCGA_samples_info <- TCGA_samples_availible_in_xena_info
+TCGA_samples_info
+
+```
+
+```{r}
+# #preparing deleted samples information
+# g6pd_deleted_samples <- read_tsv(g6pd_deleted_samples_file, col_names = TRUE, show_col_types = FALSE)
+# # Move current column names into the first row as values
+# g6pd_deleted_samples <- rbind(colnames(g6pd_deleted_samples), g6pd_deleted_samples)
+# # Fix the column names, starting with "Sample_id"
+# colnames(g6pd_deleted_samples) <- c("Sample_id", paste0("V", 2:ncol(g6pd_deleted_samples)))
+# g6pd_deleted_samples
+# #get clinical information for deleted samples
+# g6pd_deleted_samples_info <- TCGA_samples_info %>% 
+#   filter(Sample_ID %in% g6pd_deleted_samples$Sample_id)
+# 
+# 
+# g6pd_deleted_samples_info 
+
+```
+```{r}
+#run only for mutated and deleted samples together
+g6pd_deleted_samples <- read_tsv(g6pd_deleted_samples_file, col_names = TRUE, show_col_types = FALSE)
+g6pd_deleted_samples
+# Fix the column names, starting with "Sample_id"
+colnames(g6pd_deleted_samples) <- c("Sample_id", paste0("V", 2:ncol(g6pd_deleted_samples)))
+g6pd_deleted_samples
+#get clinical information for deleted samples
+g6pd_deleted_samples_info <- TCGA_samples_info %>% 
+  filter(Sample_ID %in% g6pd_deleted_samples$Sample_id)
+
+
+g6pd_deleted_samples_info 
+
+```
+
+
+
+```{r}
+# Diagnosis_Age - remove NA
+# Aneuploidy_Score - remove NA
+# Sex - remove NA
+# MSI_MANTIS_Score - remove NA
+# TCGA_PanCanAtlas_Cancer_Type_Acronym - restricted
+# American_Joint_Committee_on_Cancer_Tumor_Stage_Code - sophisticated analysis
+# TMB_(nonsynonymous)- remove NA
+# Sample_Type - primary
+# 
+
+
+# filter samples from deleted/mutated df that contains small amount of missing values
+g6pd_deleted_samples_info
+g6pd_deleted_samples_info <- g6pd_deleted_samples_info %>% filter(!is.na(Sex) & 
+                                                                  !is.na(Diagnosis_Age) & 
+                                                                  !is.na(Aneuploidy_Score) & 
+                                                                  !is.na(MSI_MANTIS_Score) & 
+                                                                  !is.na(`TMB_(nonsynonymous)`))
+g6pd_deleted_samples_info_after_filtering <- g6pd_deleted_samples_info
+g6pd_deleted_samples_info_after_filtering
+g6pd_deleted_samples_info
+
+```
+```{r}
+# tumor stage column contains a lot of different values, we will standardise it and extract the main T number 1-4
+g6pd_deleted_samples_info <- g6pd_deleted_samples_info %>% 
+  # 3·1  Standardise text (upper-case, strip spaces)
+  mutate(stage_raw = str_squish(str_to_upper(
+            American_Joint_Committee_on_Cancer_Tumor_Stage_Code))) %>% 
+  
+  # 3·2  Extract the main T number 1-4
+  mutate(stage_num = as.integer(str_extract(stage_raw, "(?<=T)[1-4]"))) %>% 
+  
+  # 3·3  Make an ordered factor with four levels
+  mutate(stage_fac = factor(stage_num,
+                            levels = 1:4,
+                            labels = c("T1","T2","T3","T4"),
+                            ordered = TRUE))
+g6pd_deleted_samples_info_relevant_col <- g6pd_deleted_samples_info %>% select(Sample_ID, stage_raw, stage_num, stage_fac, Diagnosis_Age
+, Aneuploidy_Score, `TMB_(nonsynonymous)`,Sex, MSI_MANTIS_Score, TCGA_PanCanAtlas_Cancer_Type_Acronym, American_Joint_Committee_on_Cancer_Tumor_Stage_Code)
+g6pd_deleted_samples_info_relevant_col
+g6pd_deleted_samples_info
+```
+
+
+```{r}
+# assinging G6PD_STATUS to TCGA_samples_info
+full_clin <- TCGA_samples_info %>%
+  mutate(G6PD_STATUS = ifelse(Sample_ID %in% g6pd_deleted_samples_info$Sample_ID, "deleted", "not_deleted")) #%>% select(Sample_ID, G6PD_STATUS, everything())
+full_clin
+
+full_clin$American_Joint_Committee_on_Cancer_Tumor_Stage_Code
+g6pd_deleted_samples_info$American_Joint_Committee_on_Cancer_Tumor_Stage_Code
+```
+
+```{r}
+full_clin_raw <- full_clin %>% select(Sample_ID,  Diagnosis_Age
+, Aneuploidy_Score, `TMB_(nonsynonymous)`,Sex, MSI_MANTIS_Score, TCGA_PanCanAtlas_Cancer_Type_Acronym, American_Joint_Committee_on_Cancer_Tumor_Stage_Code,G6PD_STATUS,Sample_Type) %>% 
+  filter(!is.na(Sex) & 
+                                                                  !is.na(Diagnosis_Age) & 
+                                                                  !is.na(Aneuploidy_Score) & 
+                                                                  !is.na(MSI_MANTIS_Score) & 
+                                                                  !is.na(`TMB_(nonsynonymous)`) & !is.na(Sample_Type) & Sample_Type == "Primary")
+
+full_clin_raw
+```
+
+not relevant for  non imputated analysis
+```{r}
+library(MatchIt)
+library(dplyr)
+library(tidyr)
+library(stringr)
+
+
+# full_clin <- full_clin %>%                 # your master table
+#   dplyr::rename(
+#     TMB_raw            = `TMB_(nonsynonymous)`,
+#     AJCC_Tumor_Stage   = American_Joint_Committee_on_Cancer_Tumor_Stage_Code
+#   ) %>%
+#   mutate(
+#     Sex                                   = factor(Sex),
+#     TCGA_PanCanAtlas_Cancer_Type_Acronym  = factor(TCGA_PanCanAtlas_Cancer_Type_Acronym),
+#     ## --- treatment flag -----------------------------------------------------
+#     g6pd_mutated = ifelse(G6PD_STATUS == "deleted", 1, 0),
+#     g6pd_mutated = as.integer(g6pd_mutated),
+#     
+#     
+#     log_TMB = ifelse(is.na(TMB_raw), NA, log10(TMB_raw)),
+#     
+#     stage_num = case_when(
+#          str_detect(AJCC_Tumor_Stage, "^TIS|^T0")  ~ 1,   # fold into T1 bucket
+#          str_detect(AJCC_Tumor_Stage, "^T1")       ~ 1,
+#          str_detect(AJCC_Tumor_Stage, "^T2")       ~ 2,
+#          str_detect(AJCC_Tumor_Stage, "^T3")       ~ 3,
+#          str_detect(AJCC_Tumor_Stage, "^T4")       ~ 4,
+#          TRUE                                ~ NA_real_),
+# 
+#     stage_fac = factor(stage_num,
+#                     levels = 1:4,
+#                     labels = c("T1","T2","T3","T4"),
+#                     ordered = TRUE)
+#     )
+# 
+# full_clin
+
+# Load necessary libraries
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(mice)
+library(MatchIt)
+library(cobalt)
+
+# Assume 'full_clin_raw' is your initial dataframe after loading and merging
+# Let's recreate 'full_clin' with the robust feature engineering
+# from your script.
+
+# This step renames columns, creates the treatment flag, logs TMB,
+# and standardizes the tumor stage. This part of your code was excellent.
+full_clin_mutated <- full_clin_raw %>%
+  dplyr::rename(
+    TMB = `TMB_(nonsynonymous)`,
+    AJCC_Tumor_Stage = American_Joint_Committee_on_Cancer_Tumor_Stage_Code
+  ) %>%
+  mutate(
+    # Create the binary treatment variable (1 for treated, 0 for control)
+    g6pd_mutated = ifelse(G6PD_STATUS == "deleted", 1, 0),
+    Sex = factor(Sex),
+    TCGA_PanCanAtlas_Cancer_Type_Acronym = factor(TCGA_PanCanAtlas_Cancer_Type_Acronym),
+    Sample_Type = factor(Sample_Type),
+    
+    
+
+    # Log-transform TMB for better distribution
+    
+    
+    # Standardize tumor stage into a numeric variable from 1-4
+    # This uses case_when for robustness against different notations (e.g., T1a, T1b)
+    stage_num = case_when(
+      str_detect(AJCC_Tumor_Stage, "^TIS|^T0") ~ 1, # Fold into T1
+      str_detect(AJCC_Tumor_Stage, "^T1")      ~ 1,
+      str_detect(AJCC_Tumor_Stage, "^T2")      ~ 2,
+      str_detect(AJCC_Tumor_Stage, "^T3")      ~ 3,
+      str_detect(AJCC_Tumor_Stage, "^T4")      ~ 4,
+      TRUE                                     ~ NA_real_ # All others become NA
+    ),
+
+    # Convert the numeric stage into an ordered factor for imputation
+    stage_fac = factor(stage_num,
+                       levels = 1:4,
+                       labels = c("T1", "T2", "T3", "T4"),
+                       ordered = TRUE)
+  )
+
+# Select only the variables needed for imputation and matching
+vars_for_analysis <- c(
+  "Sample_ID", "Diagnosis_Age", "Aneuploidy_Score", "log_TMB",
+  "MSI_MANTIS_Score", "Sex", "TCGA_PanCanAtlas_Cancer_Type_Acronym",
+  "stage_fac", "g6pd_mutated"
+)
+full_clin_mutated
+# full_clin_for_mice <- full_clin_mutated %>%
+#   select(all_of(vars_for_analysis)) %>%
+#   # IMPORTANT: Factorize categorical variables for mice and matchit
+#   mutate(Sex = factor(Sex),
+#          TCGA_PanCanAtlas_Cancer_Type_Acronym = factor(TCGA_PanCanAtlas_Cancer_Type_Acronym))
+# 
+# # Check the structure
+# # glimpse(full_clin_for_mice)
+# full_clin_for_mice
+```
+
+
+
+
+```{r}
+library(dplyr)
+
+fact_vars <- c("Sex", "Race_Category", "Ethnicity_Category", "AJCC_stage_collapsed")
+
+full_clin %>%
+  summarise(across(all_of(fact_vars),
+                   ~ n_distinct(.x))) %>%
+  pivot_longer(everything(),
+               names_to = "variable", values_to = "n_levels")
+full_clin
+
+```
+
+
+```{r}
+m.out <- matchit(
+  g6pd_mutated ~ Diagnosis_Age + Aneuploidy_Score + TMB + Sex + MSI_MANTIS_Score, 
+  data     = full_clin_mutated,
+  method   = "nearest",
+  exact    = ~ TCGA_PanCanAtlas_Cancer_Type_Acronym ,   # still within-cancer
+  ratio    = 2,
+  caliper  = 0.2
+)
+
+summary(m.out)        # all |SMD| should now be ≤0.10
+
+```
+
+```{r}
+library(cobalt)
+love.plot(m.out, binary = "std")      # bar plot of SMDs
+plot(m.out, type = "jitter")          # PS overlap
+plot(m.out, type = "hist")
+#plot(m.out, type = "density")
+```
+```{r}
+love.plot(m.out, stats = "mean.diffs", abs = TRUE)
+plot(densityplot(m.out, ~distance, bw = 0.01))  # distance = propensity score
+
+```
+
+```{r}
+matched_ids <- match.data(m.out)$Sample_ID
+matched_ids
+```
+```{r}
+ propensity_samples_info <- match.data(m.out)
+propensity_samples_info
+```
+```{r}
+propensity_score_samples_none_deleted <-   propensity_samples_info %>% filter(G6PD_STATUS == "not_deleted") %>% select(Sample_ID)
+propensity_score_samples_none_deleted
+propensity_score_deleted <- propensity_samples_info %>% filter(G6PD_STATUS == "deleted") %>% select(Sample_ID)
+propensity_score_deleted
+```
+
+```{r}
+write.csv(propensity_score_samples_none_deleted, "propensity_score_samples_not_deleted_without_cancer_stage_matching", row.names = FALSE)
+write.csv(propensity_score_deleted, "propensity_score_samples_deleted_without_cancer_stage_matching", row.names = FALSE)
+
+```
+
