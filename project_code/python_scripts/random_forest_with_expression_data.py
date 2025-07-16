@@ -43,11 +43,12 @@ feature_df = pd.merge(feature_df, expression_merge, on='cell_line', how='inner')
 merged_df = pd.merge(feature_df, prism_df, on='cell_line', how='inner')
 
 import pandas as pd
-random_forest_results = pd.read_csv('random_forest_results.csv')
+random_forest_results_path = download_google_drive_url("https://drive.google.com/file/d/1n8hV1mfLbsqR-zABud4JX1LccxhVhRH9")
+random_forest_results = pd.read_csv(random_forest_results_path)
 
 random_forest_results_sorted = random_forest_results.sort_values(by="pearson_correlation", ascending=False)
-top_5_drugs = random_forest_results_sorted.head(20)
+top_5_drugs = random_forest_results_sorted.head(5)
 
 print("Running random forest on " +str(top_5_drugs))
 
-run_random_forest_on_multiple_drugs_and_write_results_to_csv(feature_df, prism_df, merged_df, top_5_drugs["drug"], "random_forest_results_with_more_data.csv")
+run_random_forest_on_multiple_drugs_and_write_results_to_csv(feature_df, prism_df, merged_df, top_5_drugs["drug"], "random_forest_results_with_more_data_2.csv")

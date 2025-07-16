@@ -6,14 +6,17 @@ import numpy as np
 from scipy import stats
 from pathlib import Path
 
+from project_code.python_scripts.urls import download_google_drive_url
+
 # Constants
 GROUPS_MIN_SIZE = 2
 
 # File paths
-GDSC_DRUG_IC50_PATH = "C:/Users/sarameirab/Desktop/ai_agent_lab_data/GDSC/gdsc1_for_ttest_analysis.csv"
-PRISM_DRUG_SENSITIVITY_PATH = "C:/Users/sarameirab/Desktop/ai_agent_lab_data/depmap/PRISM_Repurposing_Public_24Q2_subsetted.csv"
+GDSC_DRUG_IC50_PATH = download_google_drive_url("https://drive.google.com/file/d/1j8aJ4w07coHaMlos3X46V_apYkZXeZUZ")
+PRISM_DRUG_SENSITIVITY_PATH = download_google_drive_url("https://drive.google.com/file/d/1DcvKjdJlKE6zy1vHdw-8iHPn3cxF_QvY")
 
-DEPMAP_NUM_LOF_CELL_LINES_PER_GENE = "C:/Users/sarameirab/Desktop/ai_agent_lab_data/depmap/depmap_num_lof_cell_lines_per_gene.csv"
+DEPMAP_NUM_LOF_CELL_LINES_PER_GENE = download_google_drive_url("https://drive.google.com/file/d/1Q9NJtvKZbJ4DbfpKuXRWmtdowclgmNfU")
+DEPMAP_LOF_PATH = download_google_drive_url("https://drive.google.com/file/d/1iedYFEZoDZxIrBZys8LXAmzD79DMIKsA")
 OUTPUT_CSV_DEPMAP_LOF_HOMOZYGOUS = "ttest_homozygous_prism.csv"
 OUTPUT_CSV_DEPMAP_LOF_HOMOZYGOUS_GDSC1 = "ttest_homozygous_GDSC1.csv"
 DRUG_ROWS_COLUMN_NAME = "string_field_0"
@@ -23,7 +26,7 @@ DRUG_ROWS_COLUMN_NAME = "string_field_0"
 def load_and_prepare_data(drug_path):
     """Load and prepare the input data files."""
     # Load the data
-    lof_df = pd.read_csv("C:/Users/sarameirab/Desktop/ai_agent_lab_data/depmap/OmicsSomaticMutationsMatrixDamaging.csv")
+    lof_df = pd.read_csv(DEPMAP_LOF_PATH)
     drug_sensitivity_df = pd.read_csv(
         drug_path)
 
