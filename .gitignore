@@ -16,5 +16,5 @@ venv
 **/*.h5
 data
 **/*.csv#
-
-
+**/*.pdf
+*.pdf

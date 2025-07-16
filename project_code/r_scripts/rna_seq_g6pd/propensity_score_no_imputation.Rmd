@@ -264,6 +264,14 @@ vars_for_analysis <- c(
   "stage_fac", "g6pd_mutated"
 )
 full_clin_mutated
+table(full_clin_mutated$stage_num)
+
+full_clin_mutated <- full_clin_mutated %>% mutate(stage_num = if_else(
+    is.na(stage_num),
+    median(stage_num, na.rm = TRUE),
+    stage_num
+  ))
+full_clin_mutated
 # full_clin_for_mice <- full_clin_mutated %>%
 #   select(all_of(vars_for_analysis)) %>%
 #   # IMPORTANT: Factorize categorical variables for mice and matchit
@@ -291,6 +299,85 @@ full_clin %>%
 full_clin
 
 ```
+```{r}
+# Show data before the actual matching
+m.out0 <- matchit(g6pd_mutated ~ Diagnosis_Age + Aneuploidy_Score + TMB + Sex + MSI_MANTIS_Score +TCGA_PanCanAtlas_Cancer_Type_Acronym,
+                  data = full_clin_mutated,
+                  method = NULL,
+  ratio    = 2,
+  caliper  = 0.2)
+summary(m.out0) 
+```
+
+```{r}
+# assumes MatchIt, tidyverse/ggplot2 are already loaded
+library(ggplot2)
+library(MatchIt)
+
+## 1. Get the matched-only data frame -------------------------------
+# By default, match.data(m.out) keeps only the observations that were kept after matching
+md <- match.data(m.out0)      # columns include .weights, .distance, and g6pd_mutated
+md
+## 2. Draw the density plot -----------------------------------------
+ggplot(md, aes(x = distance,     # the propensity score saved by MatchIt
+               fill = factor(g6pd_mutated, labels = c("Control","G6PD-mutated")))) +
+  geom_density(alpha = 0.45, adjust = 1.2) +
+  labs(title = "Propensity-score distributions pre matching",
+       x     = "Propensity score",
+       y     = "Density",
+       fill  = "Group") +
+  theme_bw() +
+  theme(legend.position = "top")
+
+```
+
+```{r}
+# assumes MatchIt, tidyverse/ggplot2 are already loaded
+library(ggplot2)
+library(MatchIt)
+
+## 1. Get the matched-only data frame -------------------------------
+# By default, match.data(m.out) keeps only the observations that were kept after matching
+md <- match.data(m.out0)      # columns include .weights, .distance, and g6pd_mutated
+
+## 2. Draw the density plot -----------------------------------------
+ggplot(md, aes(x = distance,     # the propensity score saved by MatchIt
+               fill = factor(g6pd_mutated, labels = c("Control","G6PD-mutated")))) +
+  geom_histogram(alpha = 0.8, adjust = 1.2) +
+  labs(title = "Propensity-score distributions pre matching",
+       x     = "Propensity score",
+       y     = "Density",
+       fill  = "Group") +
+  theme_bw() +
+  theme(legend.position = "top")
+
+```
+
+```{r}
+library(ggplot2)
+library(MatchIt)
+library(dplyr)      # for mutate()
+
+## 1  Matched-only data -------------------------------------------------
+md <- match.data(m.out0) |>
+  mutate(dist_log = pmax(distance, 1e-6))   # avoid log(0)
+
+## 2  Density plot with log-scaled x-axis -------------------------------
+ggplot(md, aes(x = dist_log,
+               fill = factor(g6pd_mutated,
+                             labels = c("Control", "G6PD-mutated")))) +
+  geom_histogram(alpha = 0.8, adjust = 1.2) +
+  scale_x_log10(                                 # ← log scale here
+    breaks = c(1e-8, 1e-7, 1e-6, 1e-5,1e-4, 1e-3, 1e-2, 1e-1, 1),
+    labels = scales::label_log()) +
+  labs(title = "Propensity-score distributions pre matching",
+       x     = "Propensity score (log₁₀ scale)",
+       y     = "Density",
+       fill  = "Group") +
+  theme_bw() +
+  theme(legend.position = "top")
+
+```
 
 
 ```{r}
@@ -303,17 +390,239 @@ m.out <- matchit(
   caliper  = 0.2
 )
 
-summary(m.out)        # all |SMD| should now be ≤0.10
+summary(m.out, interactions = FALSE,addlvariables = ~stage_num)        # all |SMD| should now be ≤0.10
 
 ```
+
+
+
 
 ```{r}
 library(cobalt)
 love.plot(m.out, binary = "std")      # bar plot of SMDs
 plot(m.out, type = "jitter")          # PS overlap
 plot(m.out, type = "hist")
-#plot(m.out, type = "density")
+plot(m.out, type = "density",interactive = FALSE)  # PS overlap
 ```
+```{r}
+library(cobalt)
+
+love.plot(
+  m.out,
+  binary     = "std",              # keep your original setting
+  abs        = FALSE,              # show signed SMDs
+  thresholds = c(0.10,-0.10)  # 3 = dotted
+)
+
+```
+
+```{r}
+plot(m.out, type = "ecdf", which.xs = ~ Diagnosis_Age + Aneuploidy_Score + TMB + Sex + MSI_MANTIS_Score , 
+     interactive = FALSE)  # PS overlap
+
+
+```
+
+```{r}
+# assumes MatchIt, tidyverse/ggplot2 are already loaded
+library(ggplot2)
+library(MatchIt)
+
+## 1. Get the matched-only data frame -------------------------------
+# By default, match.data(m.out) keeps only the observations that were kept after matching
+md <- match.data(m.out)      # columns include .weights, .distance, and g6pd_mutated
+
+## 2. Draw the density plot -----------------------------------------
+ggplot(md, aes(x = distance,     # the propensity score saved by MatchIt
+               fill = factor(g6pd_mutated, labels = c("Control","G6PD-mutated")))) +
+  geom_density(alpha = 0.45, adjust = 1.2) +
+  labs(title = "Propensity-score distributions after matching",
+       x     = "Propensity score",
+       y     = "Density",
+       fill  = "Group") +
+  theme_bw() +
+  theme(legend.position = "top")
+
+```
+```{r}
+umd <- data.frame(distance = m.out$distance,
+                  g6pd_mutated = as.numeric(m.out$treat))  # .treat is the treatment variable
+umd
+# assumes MatchIt, tidyverse/ggplot2 are already loaded
+library(ggplot2)
+library(MatchIt)
+
+## 1. Get the matched-only data frame -------------------------------
+# By default, match.data(m.out) keeps only the observations that were kept after matching
+      # columns include .weights, .distance, and g6pd_mutated
+
+ggplot(umd, aes(x = distance,     # the propensity score saved by MatchIt
+               fill = factor(g6pd_mutated, labels = c("Control","G6PD-mutated")))) +
+  geom_density(alpha = 0.45, adjust = 1.2) +
+  labs(title = "Propensity-score distributions pre matching",
+       x     = "Propensity score",
+       y     = "Density",
+       fill  = "Group") +
+  theme_bw() +
+  theme(legend.position = "top")
+
+
+## 2. Draw the density plot -----------------------------------------
+ggplot(umd, aes(x = distance,     # the propensity score saved by MatchIt
+               fill = factor(g6pd_mutated, labels = c("Control","G6PD-mutated")))) +
+  geom_histogram(alpha = 0.8, adjust = 1.2) +
+  labs(title = "Propensity-score distributions pre matching",
+       x     = "Propensity score",
+       y     = "Density",
+       fill  = "Group") +
+  theme_bw() +
+  theme(legend.position = "top")
+
+## 1  Matched-only data -------------------------------------------------
+md <- match.data(m.out0) |>
+  mutate(dist_log = pmax(distance, 1e-6))   # avoid log(0)
+
+
+
+## 1  Matched-only data -------------------------------------------------
+umd_after <- umd |>
+  mutate(dist_log = pmax(distance, 1e-6))   # avoid log(0)
+umd_after
+## 2  Density plot with log-scaled x-axis -------------------------------
+ggplot(umd_after, aes(x = dist_log,
+               fill = factor(g6pd_mutated,
+                             labels = c("Control", "G6PD-mutated")))) +
+  geom_density(alpha = 0.45, adjust = 1.2) +
+  scale_x_log10(                                 # ← log scale here
+    breaks = c(1e-8, 1e-7, 1e-6, 1e-5,1e-4, 1e-3, 1e-2, 1e-1, 1),
+    labels = scales::label_log()) +
+  labs(title = "Propensity-score distributions pre matching",
+       x     = "Propensity score (log₁₀ scale)",
+       y     = "Density",
+       fill  = "Group") +
+  theme_bw() +
+  theme(legend.position = "top")
+## 2  Density plot with log-scaled x-axis -------------------------------
+## 2  Density plot with log-scaled x-axis -------------------------------
+ggplot(umd_after, aes(x = dist_log,
+               fill = factor(g6pd_mutated,
+                             labels = c("Control", "G6PD-mutated")))) +
+  geom_histogram(alpha = 0.8, adjust = 1.2) +
+  scale_x_log10(                                 # ← log scale here
+    breaks = c(1e-8, 1e-7, 1e-6, 1e-5,1e-4, 1e-3, 1e-2, 1e-1, 1),
+    labels = scales::label_log()) +
+  labs(title = "Propensity-score distributions pre matching",
+       x     = "Propensity score (log₁₀ scale)",
+       y     = "Density",
+       fill  = "Group") +
+  theme_bw() +
+  theme(legend.position = "top")
+
+```
+
+
+```{r}
+# assumes MatchIt, tidyverse/ggplot2 are already loaded
+library(ggplot2)
+library(MatchIt)
+
+## 1. Get the matched-only data frame -------------------------------
+# By default, match.data(m.out) keeps only the observations that were kept after matching
+md <- match.data(m.out)      # columns include .weights, .distance, and g6pd_mutated
+
+## 2. Draw the density plot -----------------------------------------
+ggplot(md, aes(x = distance,     # the propensity score saved by MatchIt
+               fill = factor(g6pd_mutated, labels = c("Control","G6PD-mutated")))) +
+  geom_histogram(alpha = 0.8, adjust = 1.2) +
+  labs(title = "Propensity-score distributions after matching",
+       x     = "Propensity score",
+       y     = "Density",
+       fill  = "Group") +
+  theme_bw() +
+  theme(legend.position = "top")
+
+```
+
+```{r}
+library(ggplot2)
+library(MatchIt)
+library(dplyr)      # for mutate()
+
+## 1  Matched-only data -------------------------------------------------
+md_after <- match.data(m.out) |>
+  mutate(dist_log = pmax(distance, 1e-6))   # avoid log(0)
+
+## 2  Density plot with log-scaled x-axis -------------------------------
+ggplot(md_after, aes(x = dist_log,
+               fill = factor(g6pd_mutated,
+                             labels = c("Control", "G6PD-mutated")))) +
+  geom_density(alpha = 0.45, adjust = 1.2) +
+  scale_x_log10(                                 # ← log scale here
+    breaks = c(1e-8, 1e-7, 1e-6, 1e-5,1e-4, 1e-3, 1e-2, 1e-1, 1),
+    labels = scales::label_log()) +
+  labs(title = "Propensity-score distributions after matching",
+       x     = "Propensity score (log₁₀ scale)",
+       y     = "Density",
+       fill  = "Group") +
+  theme_bw() +
+  theme(legend.position = "top")
+
+```
+
+```{r}
+library(MatchIt)
+library(dplyr)
+
+md_all <- match.data(m.out)   # keeps everyone
+md_all
+```
+
+```{r}
+# ------------ 0. Packages ----------------------------------------------------
+library(dplyr)
+library(ggplot2)
+library(MatchIt)
+
+# 1. Put every unit in a data frame ---------------------------------
+md_all <- match.data(m.out, data = "all")             # propensity scores etc.
+md_all
+# 2. Attach the weights that live inside the MatchIt object ---------
+#    (named numeric vector; > 0  ⇢ kept after matching)
+md_all$match_wt <- m.out$weights[ rownames(md_all) ]  # row names line up
+
+# 3. Flag matched vs. pre-match samples -----------------------------
+md_all <- md_all %>% 
+  mutate(Sample = ifelse(match_wt > 0,
+                         "Matched sample",
+                         "Pre-match full sample"))
+
+# 4. Density plot: before *and* after matching ----------------------
+ggplot(md_all,
+       aes(x       = distance,                         # propensity score
+           fill    = factor(g6pd_mutated,
+                             labels = c("Control", "G6PD-mutated")),
+           weight  = match_wt,                         # keeps the y-axes comparable
+           linetype = Sample,
+           alpha    = Sample)) +
+  geom_density(adjust = 1.2, colour = NA) +
+  scale_alpha_manual(values = c("Pre-match full sample" = 0.25,
+                                "Matched sample"        = 0.60),
+                     guide = "none") +
+  scale_linetype_manual(values = c("Pre-match full sample" = "dashed",
+                                   "Matched sample"        = "solid"),
+                        guide = "none") +
+  labs(title = "Propensity-score distributions: before vs. after matching",
+       x = "Propensity score", y = "Density", fill = "Group") +
+  theme_bw() +
+  theme(legend.position = "top")
+
+
+
+# ----- Finished --------------------------------------------------------------
+
+```
+
+
 ```{r}
 love.plot(m.out, stats = "mean.diffs", abs = TRUE)
 plot(densityplot(m.out, ~distance, bw = 0.01))  # distance = propensity score
@@ -329,11 +638,19 @@ matched_ids
 propensity_samples_info
 ```
 ```{r}
-propensity_score_samples_none_deleted <-   propensity_samples_info %>% filter(G6PD_STATUS == "not_deleted") %>% select(Sample_ID)
-propensity_score_samples_none_deleted
-propensity_score_deleted <- propensity_samples_info %>% filter(G6PD_STATUS == "deleted") %>% select(Sample_ID)
-propensity_score_deleted
+propensity_score_samples_none_deleted_Aneuploidy <-   propensity_samples_info %>% filter(G6PD_STATUS == "not_deleted") %>% select(Aneuploidy_Score)
+propensity_score_samples_none_deleted_Aneuploidy
+propensity_score_deleted_Aneuploidy <- propensity_samples_info %>% filter(G6PD_STATUS == "deleted") %>% select(Aneuploidy_Score)
+propensity_score_deleted_Aneuploidy
 ```
+
+```{r}
+hist(full_clin_mutated$Aneuploidy_Score)
+hist(propensity_score_deleted_Aneuploidy$Aneuploidy_Score)
+hist(propensity_score_samples_none_deleted_Aneuploidy$Aneuploidy_Score)
+```
+
+
 
 ```{r}
 write.csv(propensity_score_samples_none_deleted, "propensity_score_samples_not_deleted_without_cancer_stage_matching", row.names = FALSE)

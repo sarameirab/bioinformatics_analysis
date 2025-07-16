@@ -241,10 +241,11 @@ names_df$`data_col <- colnames(matrix_for_deseq)` == rownames(names_df)
 ```
 
 
+
 ```{r}
 library("DESeq2")
 library("BiocParallel")
-rm(samples_gene_expression, XenaData); gc()
+#rm(samples_gene_expression, XenaData); gc()
 register(MulticoreParam(workers = 12)) 
 dds <- DESeqDataSetFromMatrix(countData = matrix_for_deseq,
                               colData = metadata_rnames,
@@ -283,7 +284,8 @@ plotMA(res, ylim=c(-2,2))
 ```
 ```{r}
 # getting the transformed counts for pca
-vsd <- vst(dds)
+#rlog <- rlog(dds, blind = FALSE)
+vsd <- vst(dds,blind = FALSE)
 vsd
 plotPCA(vsd, intgroup = "G6PD_STATUS")
 
@@ -307,6 +309,161 @@ symbols <- mapIds(org.Hs.eg.db,
                   column = "SYMBOL",
                   multiVals = "first")
 head(symbols)
+```
+```{r}
+# ── 1. Packages ──
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+library(pheatmap)
+
+
+
+# ── 2. Gene set for GO:0009062 ──
+go_id  <- "GO:0009062"
+go2ens <- AnnotationDbi::select(org.Hs.eg.db,
+                                keys     = go_id,
+                                keytype  = "GOALL",
+                                columns  = "ENSEMBL")
+go_genes <- unique(go2ens$ENSEMBL)
+
+# ── 3. Extract those genes from the VST matrix ──
+vsd_mat        <- assay(vsd)
+row_clean      <- sub("\\..*", "", rownames(vsd_mat))
+keep_idx       <- which(row_clean %in% go_genes)
+stopifnot(length(keep_idx) > 0)
+
+vsd_subset <- vsd_mat[keep_idx, ]
+vsd_subset <- t(scale(t(vsd_subset)))
+
+
+# ── 4. Replace row names with symbols (optional) ──
+gene_syms <- mapIds(org.Hs.eg.db, keys=row_clean[keep_idx],
+                    keytype="ENSEMBL", column="SYMBOL", multiVals="first")
+rownames(vsd_subset) <- ifelse(is.na(gene_syms), row_clean[keep_idx], gene_syms)
+
+# ── 5. Column annotation ──
+anno_df <- data.frame(G6PD_STATUS = metadata_rnames$G6PD_STATUS,
+                      row.names   = rownames(metadata_rnames))
+anno_df <- anno_df[colnames(vsd_subset), , drop=FALSE]
+
+# ── 6. Order columns: cluster *inside* each G6PD group only ──
+grp      <- anno_df$G6PD_STATUS
+cols_norm <- which(grp == "normal")
+cols_mut  <- which(grp != "normal")   # e.g. "del" / "mutated"
+
+order_within <- function(idx) {
+  if (length(idx) <= 1) return(idx)
+  idx[hclust(dist(t(vsd_subset[, idx])), method = "average")$order]
+}
+ord_norm <- order_within(cols_norm)
+ord_mut  <- order_within(cols_mut)
+
+ord_cols <- c(ord_norm, ord_mut)      # normals first, mutants second
+vsd_ord  <- vsd_subset[, ord_cols]
+anno_ord <- anno_df[ord_cols, , drop=FALSE]
+
+# ── 7. Draw the heat‑map ──
+pheatmap <- pheatmap(vsd_ord,
+         scale                     = "none",
+         annotation_col            = anno_ord,
+         cluster_cols              = FALSE,
+         cluster_rows = TRUE , # we pre‑ordered columns
+         gaps_col                  = length(ord_norm),  # visual break
+         clustering_distance_rows  = "correlation",
+         clustering_method         = "average",
+         show_rownames             = TRUE,
+         fontsize_row              = 6,
+         main = "Fatty‑acid catabolic process (GO:0009062)")
+pheatmap
+# ── choose a perceptually uniform diverging palette ───────────────
+# my_cols   <- colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)  # blue‑white‑red
+# my_breaks <- seq(-2, 2, length.out = 101)   # 0.04‑width bins
+# 
+# ## ── draw the heat‑map exactly as before but pass colour + breaks ──
+# p <- pheatmap(vsd_ord,
+#               scale                     = "row",
+#               annotation_col            = anno_ord,
+#               cluster_cols              = FALSE,
+#               cluster_rows              = TRUE,
+#               gaps_col                  = length(ord_norm),
+#               clustering_distance_rows  = "correlation",
+#               clustering_method         = "average",
+#               color                     = my_cols,
+#               breaks                    = my_breaks,
+#               legend_breaks             = c(-2, -1, 0, 1, 2),
+#               legend_labels             = c("‑2", "‑1", "0", "1", "2"),
+#               show_rownames             = TRUE,
+#               fontsize_row              = 6,
+#               main = "Fatty‑acid catabolic process (GO:0009062)\n(row‑Z‑score, palette ±2 SD)")
+# 
+# p
+
+
+```
+```{r}
+library(dplyr); library(stringr)
+library(AnnotationDbi); library(org.Hs.eg.db); library(pheatmap)
+
+## ── 1. Extract leading‑edge genes (ENSEMBL IDs) ────────────────────────────
+go_id <- "GO:0009062"
+lead_vec <- gsea_res@result %>% filter(ID == go_id) %>% pull(core_enrichment)
+lead_ens <- str_split(lead_vec, "/")[[1]] %>% unique()
+
+# optional: drop version numbers (e.g. ENSG00000123456.3 → ENSG00000123456)
+lead_ens <- sub("\\..*$", "", lead_ens)
+
+## ── 2. Build a matrix of mean‑centred log2FC instead of row‑scaling ───────
+vsd_mat <- assay(vsd)                    # vst values (≈ log2 counts)
+grp     <- metadata_rnames$G6PD_STATUS
+stopifnot(identical(colnames(vsd_mat), rownames(metadata_rnames)))
+
+# # Keep only leading‑edge genes that exist in the matrix
+# row_clean <- sub("\\..*$", "", rownames(vsd_mat))
+# keep_rows <- which(row_clean %in% lead_ens)
+# if (length(keep_rows) == 0)
+#     stop("No leading‑edge genes found in the vst matrix.")
+# vsd_lead <- vsd_mat[keep_rows, ]
+
+# Calculate group means and a per‑gene log2FC (del – normal)
+mu_del    <- rowMeans(vsd_lead[, grp == "del",    drop = FALSE])
+mu_normal <- rowMeans(vsd_lead[, grp == "normal", drop = FALSE])
+vsd_centered <- vsd_lead - mu_normal              # centre on normals
+
+## ── 3. Order columns: cluster within each group only ───────────────────────
+order_within <- function(idx) {
+  if (length(idx) <= 1) return(idx)
+  idx[hclust(dist(t(vsd_centered[, idx])), method = "average")$order]
+}
+idx_norm <- which(grp == "normal")
+idx_del  <- which(grp == "del")
+ord_cols <- c(order_within(idx_norm), order_within(idx_del))
+
+anno_df  <- data.frame(G6PD_STATUS = grp[ord_cols],
+                       row.names   = colnames(vsd_centered)[ord_cols])
+
+## ── 4. Replace row names with gene symbols for readability ────────────────
+gene_syms <- mapIds(org.Hs.eg.db,
+                    keys      = row_clean[keep_rows],
+                    keytype   = "ENSEMBL",
+                    column    = "SYMBOL",
+                    multiVals = "first")
+rownames(vsd_centered) <- ifelse(is.na(gene_syms),
+                                 row_clean[keep_rows],
+                                 gene_syms)
+
+## ── 5. Draw the heat‑map ──────────────────────────────────────────────────
+pheatmap(vsd_centered[, ord_cols],
+         color                     = colorRampPalette(c("navy", "white", "firebrick3"))(100),
+         annotation_col            = anno_df,
+         cluster_cols              = FALSE,                 # we pre‑ordered
+         gaps_col                  = length(idx_norm),      # visual split
+         clustering_distance_rows  = "correlation",
+         main = "Leading‑edge genes – fatty‑acid catabolic process (GO:0009062)\nvalues = expression centred on normal group")
+
+
+```
+```{r}
+
 ```
 
 ```{r}
@@ -474,4 +631,5 @@ Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by press
 When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
 
 The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
 
