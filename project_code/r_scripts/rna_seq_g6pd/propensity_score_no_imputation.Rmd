@@ -57,7 +57,7 @@ g6pd_deleted_samples_file <- g6pd_deleted_and_mutated_samples_file
 #preparing TCGA samples information and taking only samples availible in xena servers
 TCGA_samples_info <- read_tsv(TCGA_samples_data_path, col_names = TRUE, show_col_types = FALSE)
 colnames(TCGA_samples_info) <- gsub("\\s+", "_", colnames(TCGA_samples_info))
-
+TCGA_samples_info
 #filtering only samples that are available in xena
 
 TCGA_samples_availible_in_xena_info <- TCGA_samples_info %>% filter(Sample_ID %in% samples_availible_in_xena)
@@ -90,7 +90,7 @@ g6pd_deleted_samples
 # Fix the column names, starting with "Sample_id"
 colnames(g6pd_deleted_samples) <- c("Sample_id", paste0("V", 2:ncol(g6pd_deleted_samples)))
 g6pd_deleted_samples
-#get clinical information for deleted samples
+#Some samples existed in both groups. We trust that the sample is deleted and mutated so we remove it from the other group.
 g6pd_deleted_samples_info <- TCGA_samples_info %>% 
   filter(Sample_ID %in% g6pd_deleted_samples$Sample_id)
 
@@ -412,8 +412,40 @@ love.plot(
   binary     = "std",              # keep your original setting
   abs        = FALSE,              # show signed SMDs
   thresholds = c(0.10,-0.10)  # 3 = dotted
-)
+) + theme(axis.text.y = element_text(size = 12, face = "bold"))
 
+
+
+# Extract variable names from your matchit object
+vars <- colnames(m.out$X)  # m.out$X contains covariates
+
+# Step 1: First 5 variables → remove underscores
+first5 <- gsub("_", " ", vars[1:5])
+
+# Step 2: Rest → take the string after last underscore, prepend "Cancer type "
+rest <- sub(".*_Acronym", "Cancer type", vars[-(1:5)])
+
+# Combine all
+custom_labels <- c(first5, rest)
+
+# Map them back (named vector: original -> new label)
+names(custom_labels) <- vars
+
+# Plot
+library(cobalt)
+p <- love.plot(
+  m.out,
+  binary     = "std",
+  abs        = FALSE,
+  thresholds = c(0.10, -0.10),
+  var.names  = custom_labels
+) + theme(axis.text.y = element_text(size = 10, face = "bold"))
+
+ggsave(
+  filename = "~/workspace/bioinformatics_analysis/propensity_score_figures/love_plot.png",
+  plot = p,
+  width = 5, height = 6, dpi = 600
+)
 ```
 
 ```{r}

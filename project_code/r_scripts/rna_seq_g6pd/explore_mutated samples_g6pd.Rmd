@@ -1,0 +1,39 @@
+---
+title: "explore_mutated samples_g6pd"
+output: html_document
+---
+
+```{r}
+mutated_samples_file <- download_url("https://drive.google.com/file/d/1wLxQFgHJ1aW-r-jTnXV7btngA1Bcpm3C", type="tsv")
+sig_mut_file <- download_url("https://drive.google.com/file/d/1mG7tYUkXQu6iBQNO6FlMwXQOGQXNFLyN")
+sig_mut_plus_del <- download_url("https://drive.google.com/file/d/1eRDm68CTg2e4tUvJrJWWoYaJCPnNJm_v")
+del_file <- download_url("https://drive.google.com/file/d/1BxjcimPvrUOFOzLLbkwWc0fqyQGOLyju")
+```
+
+```{r}
+mutated_samples <- read_tsv(mutated_samples_file)
+sig_mut <- read.csv(sig_mut_file, header = TRUE)
+sig_mut_plus_del <- read.csv(sig_mut_plus_del, header = TRUE)
+del <- read.csv(del_file, header = FALSE)
+mutated_samples
+sig_mut
+sig_mut_plus_del
+del
+```
+
+```{r}
+intersected_mutated_samples <- intersect(sig_mut_plus_del$Sample.ID, del$V1)
+intersected_mutated_samples
+length(intersected_mutated_samples)
+library(dplyr)
+
+sig_mut_no_intersect <- sig_mut %>%
+  filter(!Sample.ID %in% intersect(sig_mut$Sample.ID, sig_mut_plus_del$Sample.ID))
+sig_mut_no_intersect
+```
+```{r}
+intersected_mutated_samples
+setdiff(del$V1, intersected_mutated_samples)
+
+```
+

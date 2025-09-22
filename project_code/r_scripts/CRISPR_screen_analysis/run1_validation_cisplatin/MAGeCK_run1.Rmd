@@ -1,0 +1,35 @@
+---
+title: "MAGeCK_run1"
+output: html_document
+---
+```{r}
+library(dplyr)
+library(MAGeCKFlute)
+```
+
+```{r}
+# Load the library
+library(MAGeCKFlute)
+
+# Define the path to your results file
+gene_summary_file <- "/home/sara-meira-and-efraim/workspace/bioinformatics_analysis/CRISPR_screen_data/seq_results/run1_validation_and_cisplatin/raw_seq_results/run1_fastq/workflow/results/test/mle.gene_summary.txt"
+
+# Your control and treatment condition names (without the ".beta" suffix)
+# Check your design matrix for these names!
+control_condition <- "p3"      # Example: your third condition
+treatment_condition <- "cis20um" # Example: your cisplatin condition
+
+# Run the FluteMLE pipeline
+FluteMLE(gene_summary = gene_summary_file,
+         ctrlname = control_condition,
+         treatname = treatment_condition,
+         organism = "hsa",  # "hsa" for human, "mmu" for mouse
+         proj = "Cisplatin_Screen_Analysis",
+         cell_cycle_normalization = FALSE)
+```
+```{r}
+
+
+
+```
+

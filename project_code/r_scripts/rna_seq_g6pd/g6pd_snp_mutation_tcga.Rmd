@@ -15,6 +15,7 @@ mutated_samples_path <- download_url("https://drive.google.com/file/d/1wLxQFgHJ1
 library(readr)
 #mutated_samples <- read_tsv(mutated_samples_path)
 mutated_samples <- read_tsv(mutated_samples_path)
+mutated_samples
 ```
 ```{r}
 library(dplyr)
@@ -23,11 +24,19 @@ library(stringr)
 significant_impacted_samples <- mutated_samples %>%
   filter(str_detect(`Functional Impact`, regex("MutationAssessor: high|impact: deleterious|impact: probably_damaging|pathogenicity: pathogenic", ignore_case = TRUE)))
 significant_impacted_samples
-high_allele_frequency <- significant_impacted_samples %>% filter(`Allele Freq (T)` > 0.4)
+high_allele_frequency <- significant_impacted_samples #%>% filter(`Allele Freq (T)` > 0.1)
 high_allele_frequency
 ```
 ```{r}
-w
+length(unique(high_allele_frequency$`Sample ID`))
+sig_mut_plus_del <- download_url("https://drive.google.com/file/d/1eRDm68CTg2e4tUvJrJWWoYaJCPnNJm_v")
+sig_mut_plus_del <- read.csv(sig_mut_plus_del, header = TRUE)
+sig_mut_plus_del
+
+```
+```{r}
+length(intersect(high_allele_frequency$`Sample ID`, sig_mut_plus_del$Sample.ID))
+
 ```
 
 Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.

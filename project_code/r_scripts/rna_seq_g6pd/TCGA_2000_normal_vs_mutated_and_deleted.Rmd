@@ -1,4 +1,9 @@
 ---
+title: "TCGA_2000_normal_vs_mutated_and_deleted"
+output: html_document
+---
+
+---
 title: "R Notebook"
 output: html_notebook
 ---
@@ -37,27 +42,14 @@ samples_gene_expression = fread("TcgaTargetGtex_gene_expected_count.gz");
 ```{r}
 #g6pd_deleted_samples_file <-download_url("https://drive.google.com/file/d/1BxjcimPvrUOFOzLLbkwWc0fqyQGOLyju") #deleted samples
 #sample_file_g6pd_control_normal_expression_file <- download_url("https://drive.google.com/file/d/1oRrh-GFLyv9J7lu2xChizBLKYMjHadu1") # 200 samples ctr
-#sample_file_g6pd_control_normal_expression_file <- download_url("https://drive.google.com/file/d/18Io0Je293DopXAmz163wsALnf17UBxsu") # 2000 middle expression g6pd normal
+sample_file_g6pd_control_normal_expression_file <- download_url("https://drive.google.com/file/d/1qOw6tehkJj9sCPae4DOk8FZ66ADyu9zS") # 2012 middle expression g6pd normal
 #sample_file_g6pd_control_normal_expression_file <- download_url("https://drive.google.com/file/d/1fONWXejRx9xvKKJr-6cdbrhrMHK2PAvA") # propensity score controls for deleted samples
 #sample_file_g6pd_control_normal_expression_file <- #download_url("https://drive.google.com/file/d/1VpjKXenSSWBewblp2GH7FWTV9n0ftwJB")#G6PD_normal_cancer_type_based_selection_not_metastatic.csv (~1400 samples)
 TCGA_samples_data_path <- download_url("https://drive.google.com/file/d/1ELYxyn6lnF__Pc7YX2NtiitwWCCZNq-n", type="tsv")
-#g6pd_deleted_samples_file <- download_url("https://drive.google.com/file/d/1eRDm68CTg2e4tUvJrJWWoYaJCPnNJm_v")#deleted and mutated samples together
-#propensity_score_deleted_and_mutated_controls <- download_url("https://drive.google.com/file/d/139-ugep8A6yxC3MabSpDJN_nAqWP6A5C")
-#propensity_score_deleted_and_mutated_treatment <-  download_url("https://drive.google.com/file/d/1fhugBDQBFy4DnbR_PswH8X_-KGgWxne2")
+g6pd_deleted_samples_file <- download_url("https://drive.google.com/file/d/1eRDm68CTg2e4tUvJrJWWoYaJCPnNJm_v")#deleted and mutated samples together
 
-propensity_score_deleted_and_mutated_without_cancer_stage_matching <- download_url("https://drive.google.com/file/d/1wGqpQXIAfHiENczl7CAkSzmneIg-wtk3")
-propensity_score_not_deleted_and_mutated_without_cancer_stage_matching <- download_url("https://drive.google.com/file/d/1sfvhe3iKx_NASMDFEcAweGtmnXrQD5MT")
-propensity_score_deleted_and_mutated_without_cancer_stage_matching
-
-propensity_score_not_deleted_and_mutated_without_cancer_stage_matching
 ```
 
-```{r}
-sample_file_g6pd_control_normal_expression_file <- propensity_score_not_deleted_and_mutated_without_cancer_stage_matching
-g6pd_deleted_samples_file <- propensity_score_deleted_and_mutated_without_cancer_stage_matching
-sample_file_g6pd_control_normal_expression_file
-g6pd_deleted_samples_file
-```
 
 
 ```{r}
@@ -243,7 +235,7 @@ names_df$`data_col <- colnames(matrix_for_deseq)` == rownames(names_df)
 
 
 ```{r}
-# library("DESeq2")
+library("DESeq2")
 library("BiocParallel")
 #rm(samples_gene_expression, XenaData); gc()
 register(MulticoreParam(workers = 12)) 
@@ -671,7 +663,7 @@ gsea_res <- gseGO(genes_for_gsea,
 ```{r}
 gsea_res_df <- as.data.frame(gsea_res)
 gsea_res_df
-#write.csv(gsea_res_df, file = "~/Desktop/gsea_res_df.csv")
+write.csv(gsea_res_df, file = "~/Desktop/gsea_res_df.csv")
 ```
 
 ```{r}
@@ -707,9 +699,9 @@ fit_gsea <- gseaplot(gsea_res, geneSetID = fatty_acid_catabolic_process ,title =
 fit_gsea
 
 
-# png("~/Desktop/fatty_acid_catabolic_process.png", width = 1200, height = 900, res = 150)
-# gseaplot(gsea_res, geneSetID = fatty_acid_catabolic_process, title = "Fatty Acid Catabolic Process")
-# dev.off()
+png("~/Desktop/fatty_acid_catabolic_process.png", width = 1200, height = 900, res = 150)
+gseaplot(gsea_res, geneSetID = fatty_acid_catabolic_process, title = "Fatty Acid Catabolic Process")
+dev.off()
 
 
 ```
