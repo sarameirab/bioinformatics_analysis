@@ -18,3 +18,5 @@ data
 **/*.csv#
 **/*.pdf
 *.pdf
+CRISPR_screen_data
+propensity_score_figures
