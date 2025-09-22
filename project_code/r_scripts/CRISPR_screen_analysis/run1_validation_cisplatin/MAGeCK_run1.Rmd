@@ -24,8 +24,7 @@ FluteMLE(gene_summary = gene_summary_file,
          ctrlname = control_condition,
          treatname = treatment_condition,
          organism = "hsa",  # "hsa" for human, "mmu" for mouse
-         proj = "Cisplatin_Screen_Analysis",
-         cell_cycle_normalization = FALSE)
+         proj = "Cisplatin_Screen_Analysis")
 ```
 ```{r}
 
